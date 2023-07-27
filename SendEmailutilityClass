@@ -1,0 +1,13 @@
+public class EmailUtility {
+    public static void sendEmail(String subject, String body) {
+        String usersEmailAddresses = System.Label.Users_Email_Addresses;
+        List<String> recipients = usersEmailAddresses.split(',');
+        Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+        email.setSenderDisplayName('MVC Automation');
+        email.setToAddresses(recipients);
+        email.setSubject(subject);
+        email.setPlainTextBody(body);
+        Messaging.sendEmail(new Messaging.SingleEmailMessage[]{email});
+        system.debug(' Messaging.sendEmail(new Messaging.SingleEmailMessage[]{email});');
+    }
+}
