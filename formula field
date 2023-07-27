@@ -1,0 +1,287 @@
+approved for the supply
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+lead
+____________________________________________________________________________________________
+IF(
+ISPICKVAL(Patient_Category__c, 'Initial Coverage - New Setup') &&
+NOT(ISBLANK(Referral_Chart_Note_to_Sleep_Study__c)) &&
+(Referral_Chart_Note_to_Sleep_Study__c <= Polysomnogram__c) &&
+NOT(ISBLANK(Polysomnogram__c)) &&
+(DWO_Supplies__c >= TODAY() - 365),
+True,
+IF(
+ISPICKVAL(Patient_Category__c, 'Initial Coverage - Failed Compliance') &&
+(Referral_Chart_Note_to_Sleep_Study__c > Initial_PAP_Date__c) &&
+(Referral_Chart_Note_to_Sleep_Study__c <= Polysomnogram__c) &&
+NOT(ISBLANK(Polysomnogram__c)) &&
+(Polysomnogram__c > Initial_PAP_Date__c) &&
+NOT(ISBLANK(DWO_Supplies__c)) &&
+(DWO_Supplies__c >= Polysomnogram__c),
+True,
+IF(
+ISPICKVAL(Patient_Category__c, 'Initial Coverage - Post Compliance') &&
+NOT(ISBLANK(Referral_Chart_Note_to_Sleep_Study__c)) &&
+(Referral_Chart_Note_to_Sleep_Study__c <= Polysomnogram__c) &&
+NOT(ISBLANK(Polysomnogram__c)) &&
+NOT(ISBLANK(DWO_Supplies__c)) &&
+(DWO_Supplies__c >= Polysomnogram__c) &&
+(Compliance_Face_to_Face_Evaluation__c > Date_Last_received_PAP__c + 30),
+True,
+IF(
+ISPICKVAL(Patient_Category__c, 'Entering Medicare') &&
+NOT(ISBLANK(DWO_Supplies__c)) &&
+NOT(ISBLANK(Polysomnogram__c)) &&
+NOT(ISBLANK(Face_to_Face_Evaluation__c)) &&
+(Polysomnogram__c <= Primary_Insurance_Medicare_Entry_Date__c) &&
+(DWO_Supplies__c >= TODAY() - 365) &&
+(Face_to_Face_Evaluation__c >= Primary_Insurance_Medicare_Entry_Date__c),
+True,
+
+IF(
+NOT(ISBLANK(Documentation_Override__c)) &&
+NOT(ISPICKVAL(Documentation_Override_Reason__c, '')) &&
+(Documentation_Override_Date__c >= TODAY() - 14),
+True,
+IF(
+ISPICKVAL(Patient_Category__c, '13/13') &&
+ISNULL(DWO_Supplies__c) = FALSE &&
+(DWO_Supplies__c >= TODAY() - 365),
+True,
+IF(
+ISPICKVAL(Patient_Category__c, 'Private Insurance') &&
+(
+ISNULL(DWO_Supplies__c) = FALSE ||
+ISNULL(Blanket_RX__c ) = FALSE
+),
+True,
+False
+)
+)
+)
+)
+)
+)
+)
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Account
+_________________________________________________________________________________________
+
+IF(
+ISPICKVAL(Patient_Category__pc, 'Initial Coverage - New Setup') &&
+NOT(ISBLANK(Referral_chart_note_to_sleep_study__pc)) &&
+(Referral_chart_note_to_sleep_study__pc <= Polysomnogram__pc) &&
+NOT(ISBLANK(Polysomnogram__pc)) &&
+(Current_Rx_Date_Supplies__pc >= TODAY() - 365),
+True,
+IF(
+ISPICKVAL(Patient_Category__pc, 'Initial Coverage - Failed Compliance') &&
+(Referral_chart_note_to_sleep_study__pc > Initial_PAP_Date__c) &&
+(Referral_chart_note_to_sleep_study__pc <= Polysomnogram__pc) &&
+NOT(ISBLANK(Polysomnogram__pc)) &&
+(Polysomnogram__pc > Initial_PAP_Date__c) &&
+NOT(ISBLANK(Current_Rx_Date_Supplies__pc)) &&
+(Current_Rx_Date_Supplies__pc >= Polysomnogram__pc),
+True,
+IF(
+ISPICKVAL(Patient_Category__pc, 'Initial Coverage - Post Compliance') &&
+NOT(ISBLANK(Referral_chart_note_to_sleep_study__pc)) &&
+(Referral_chart_note_to_sleep_study__pc <= Polysomnogram__pc) &&
+NOT(ISBLANK(Polysomnogram__pc)) &&
+NOT(ISBLANK(Current_Rx_Date_Supplies__pc)) &&
+(Current_Rx_Date_Supplies__pc >= Polysomnogram__pc) &&
+(Compliance_Face_to_Face_Evaluation__pc >Date_Last_received_PAP__c + 30),
+True,
+IF(
+ISPICKVAL(Patient_Category__pc, 'Entering Medicare') &&
+NOT(ISBLANK(Current_Rx_Date_Supplies__pc)) &&
+NOT(ISBLANK(Polysomnogram__pc)) &&
+NOT(ISBLANK(Face_to_face_evaluation__pc)) &&
+(Polysomnogram__pc <= Primary_Insurance_Medicare_Entry_Date__c) &&
+(Current_Rx_Date_Supplies__pc >= TODAY() - 365) &&
+(Face_to_face_evaluation__pc >= Primary_Insurance_Medicare_Entry_Date__c),
+True,
+
+
+
+IF(
+NOT(ISBLANK(Documentation_Override__c)) &&
+NOT(ISPICKVAL(Documentation_Override_Reason__c, '')) &&
+(Documentation_Override_Date__c >= TODAY() - 14),
+True,
+IF(
+ISPICKVAL(Patient_Category__pc, '13/13') &&
+ISBLANK(Current_Rx_Date_Supplies__pc ) = FALSE &&
+(Current_Rx_Date_Supplies__pc >= TODAY() - 365),
+True,
+IF(
+ISPICKVAL(Patient_Category__pc, 'Private Insurance') &&
+(
+ISBLANK(Current_Rx_Date_Supplies__pc ) = FALSE ||
+ISBLANK(Blanket_RX__c) = FALSE
+),
+True,
+False
+)
+)
+)
+)
+)
+)
+
+)
+
+
+
+
+
+
+
+
+
+
+
+
+Approved for the PAP
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Account
+____________________________________________________________________________________________
+IF(
+ISPICKVAL(Patient_Category__pc, 'Initial Coverage - New Setup') &&
+NOT(ISBLANK(Current_Rx_Date_PAP__pc)) &&
+NOT(ISBLANK(Polysomnogram__pc)) &&
+NOT(ISBLANK(Referral_chart_note_to_sleep_study__pc)) &&
+(Referral_chart_note_to_sleep_study__pc <= Polysomnogram__pc) &&
+(Current_Rx_Date_PAP__pc >= TODAY() - 365),
+True,
+
+IF(
+ISPICKVAL(Patient_Category__pc, 'Initial Coverage - Failed Compliance') &&
+NOT(ISBLANK(Referral_chart_note_to_sleep_study__pc)) &&
+NOT(ISBLANK(Polysomnogram__pc)) &&
+NOT(ISBLANK(Current_Rx_Date_PAP__pc)) &&
+NOT(ISBLANK(Initial_PAP_Date__c)) &&
+(Referral_chart_note_to_sleep_study__pc <= Polysomnogram__pc) &&
+(Referral_chart_note_to_sleep_study__pc > Initial_PAP_Date__c) &&
+(Polysomnogram__pc > Initial_PAP_Date__c) &&
+(Current_Rx_Date_PAP__pc >= Polysomnogram__pc),
+True,
+
+IF(
+ISPICKVAL(Patient_Category__pc, 'Entering Medicare') &&
+NOT(ISBLANK(Current_Rx_Date_PAP__pc)) &&
+NOT(ISBLANK(Polysomnogram__pc)) &&
+NOT(ISBLANK(Face_to_face_evaluation__pc)) &&
+NOT(ISBLANK(Primary_Insurance_Medicare_Entry_Date__c)) &&
+(Polysomnogram__pc <= Primary_Insurance_Medicare_Entry_Date__c) &&
+(Current_Rx_Date_PAP__pc >= TODAY() - 365) &&
+(Face_to_face_evaluation__pc >= Primary_Insurance_Medicare_Entry_Date__c),
+True,
+
+
+
+IF(
+NOT(ISBLANK(Documentation_Override__c)) &&
+NOT(ISPICKVAL(Documentation_Override_Reason__c, '')) &&
+(Documentation_Override_Date__c >= TODAY() - 14),
+True,
+
+IF(
+AND(
+ISPICKVAL(Patient_Category__pc, '13/13'),
+ISNULL(Current_Rx_Date_PAP__pc) = FALSE,
+Current_Rx_Date_PAP__pc >= TODAY() - 365,
+ISNULL(Face_to_face_evaluation__pc) = FALSE,
+Face_to_face_evaluation__pc >= TODAY() - 365
+),
+True,
+
+
+IF(ISPICKVAL(Patient_Category__pc, 'Initial Coverage – Post Compliance'),FALSE,
+IF(ISPICKVAL(Patient_Category__pc, 'Initial Coverage – Initial Coverage – Compliance Period'),FALSE,
+
+
+
+IF(
+AND(
+ISPICKVAL(Patient_Category__pc, 'Private Insurance'),
+ISNULL(Current_Rx_Date_PAP__pc) = FALSE,
+Current_Rx_Date_PAP__pc >= TODAY() - 365,
+ISNULL(Polysomnogram__pc) = FALSE
+),
+True,
+False
+)
+)
+)
+)
+)
+)
+))
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Lead
+___________________________________________________________________________________________
+IF(
+ISPICKVAL(Patient_Category__c, 'Initial Coverage - New Setup') &&
+NOT(ISBLANK(Referral_Chart_Note_to_Sleep_Study__c)) &&
+(Referral_Chart_Note_to_Sleep_Study__c <= Polysomnogram__c) &&
+NOT(ISBLANK(Polysomnogram__c)) &&
+(DWO_PAP__c >= TODAY() - 365),
+True,
+IF(
+ISPICKVAL(Patient_Category__c, 'Initial Coverage - Failed Compliance') &&
+NOT(ISBLANK(Referral_Chart_Note_to_Sleep_Study__c)) &&
+(Referral_Chart_Note_to_Sleep_Study__c <= Polysomnogram__c) &&
+(Referral_Chart_Note_to_Sleep_Study__c > Initial_PAP_Date__c) &&
+NOT(ISBLANK(Polysomnogram__c)) &&
+(Polysomnogram__c > Initial_PAP_Date__c) &&
+NOT(ISBLANK(DWO_PAP__c)) &&
+(DWO_PAP__c >= Polysomnogram__c),
+True,
+IF(
+ISPICKVAL(Patient_Category__c, 'Entering Medicare') &&
+NOT(ISBLANK(DWO_PAP__c)) &&
+NOT(ISBLANK(Polysomnogram__c)) &&
+NOT(ISBLANK(Face_to_Face_Evaluation__c)) &&
+(Polysomnogram__c <= Primary_Insurance_Medicare_Entry_Date__c) &&
+(DWO_PAP__c >= TODAY() - 365) &&
+(Face_to_Face_Evaluation__c >= Primary_Insurance_Medicare_Entry_Date__c),
+True,
+
+IF(
+ISPICKVAL(Patient_Category__c, '13/13') &&
+NOT(ISNULL(DWO_PAP__c)) &&
+(DWO_PAP__c >= TODAY() - 365) &&
+NOT(ISNULL(Face_to_Face_Evaluation__c)) &&
+(Face_to_Face_Evaluation__c >= TODAY() - 365),
+True,
+IF(
+ISPICKVAL(Patient_Category__c, 'Private Insurance') &&
+NOT(ISNULL(DWO_PAP__c)) &&
+(DWO_PAP__c >= TODAY() - 365) &&
+NOT(ISNULL(Polysomnogram__c)) &&
+NOT(ISNULL(Referral_Chart_Note_to_Sleep_Study__c)) &&
+(Referral_Chart_Note_to_Sleep_Study__c <= Polysomnogram__c) &&
+ISPICKVAL(Does_PT_have_working_PAP__c, 'No'),
+True,
+IF(
+ISPICKVAL(Patient_Category__c, 'Private Insurance') &&
+NOT(ISNULL(DWO_PAP__c)) &&
+(DWO_PAP__c >= TODAY() - 365) &&
+NOT(ISNULL(Polysomnogram__c)) &&
+ISPICKVAL(Does_PT_have_working_PAP__c, 'Yes'),
+True,
+IF(
+NOT(ISBLANK(Documentation_Override__c)) &&
+NOT(ISPICKVAL(Documentation_Override_Reason__c, '')) &&
+(Documentation_Override_Date__c >= TODAY() - 14),
+True,
+False
+)
+)
+)
+)
+)
+)
+
+)
