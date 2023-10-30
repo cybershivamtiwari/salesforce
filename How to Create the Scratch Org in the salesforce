@@ -1,0 +1,17 @@
+LOGIN TO SALESFORCE OR CREATE A NEW DEV ORG
+IN SETUP  Quick Find Box SEARCH DevHub and enable dev org
+Then go to profile search salesforceDLX and check the box then save.
+In App launcher search namespace registries then link namespace 
+It takes 2-5 minutes to link the namespace to the org prefix you want.
+Then go to vs code and create project 
+Go to vs code and then  sfdx project json fill namespace with your namespace registries
+
+Then authorize a dev org where dev hub is enabled.
+sfdx force:org:create -s -f config/project-scratch-def.json -a text@gmail.com-org   --durationdays 30    
+It generates the username of scratch org
+sfdx force:user:password:generate --targetusername test-ll2u1eou9lxe@example.com  (scrach org id)
+sfdx force:user:display --targetusername test-ll2u1eou9lxe@example.com
+It fetches the details of your org and save it  to Notepad 
+In description, you have a login URL copy the login URL and paste into Chrome 
+And login through username and password
+The end 😊
