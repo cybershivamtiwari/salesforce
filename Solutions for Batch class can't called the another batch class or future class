@@ -1,0 +1,338 @@
+____________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+
+problem :- 1.apex batch class are not allowed to call another batch class or future class.
+           2.callout are not allowed from the trigger.
+______________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________
+solutions:-.through the event platform -
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+     1.Create the trigger on the object 
+        --add necessary condition(required) 
+        --check the if list is not empty then call the platform event
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+trigger UpdateWebhooksIDstrigger on HIC_ShopifySync__HIC_Webhook__c (after update) {
+    List<UpdateWebhooksID__e> eventsToPublish = new List<UpdateWebhooksID__e>();
+    System.debug('eventsToPublish**' + eventsToPublish);
+    for (HIC_ShopifySync__HIC_Webhook__c webhook : [SELECT Id, LastModifiedDate, HIC_ShopifySync__Webhook_Id__c FROM HIC_ShopifySync__HIC_Webhook__c WHERE HIC_ShopifySync__Topic__c = 'customers/create' OR HIC_ShopifySync__Topic__c = 'customers/update']) {
+        if (Trigger.oldMap.containsKey(webhook.Id) && 
+            ((webhook.LastModifiedDate != Trigger.oldMap.get(webhook.Id).LastModifiedDate) || 
+            (webhook.HIC_ShopifySync__Webhook_Id__c != Trigger.oldMap.get(webhook.Id).HIC_ShopifySync__Webhook_Id__c))) {
+            
+            UpdateWebhooksID__e webEvent = new UpdateWebhooksID__e();
+            webEvent.webhookId__c = webhook.Id;
+            eventsToPublish.add(webEvent);
+            System.debug('eventsToPublish****' + eventsToPublish);
+        }
+    }
+    System.debug('eventsToPublish******' + eventsToPublish);
+    
+    if (!eventsToPublish.isEmpty()) {
+        List<Database.SaveResult> results = EventBus.publish(eventsToPublish);
+        System.debug('results******' + results);
+        for (Database.SaveResult result : results) {
+            if (!result.isSuccess()) {
+                for (Database.Error error : result.getErrors()) {
+                    System.debug('Error message: ' + error.getMessage());
+                    System.debug('Status code: ' + error.getStatusCode());
+                }
+            }
+        }
+    }
+}
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    2.create the event trigger:-
+            --create the platform event
+            --add necessary custom field like id etc.
+            --create the event trigger (Add the required condition)
+            --call the handler class where you make callout(future method)
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+trigger UpdateCalloutEventTrigger on UpdateWebhooksID__e (after insert) {  
+    List<HIC_ShopifySync__HIC_Webhook__c> webhooksToUpdate = new List<HIC_ShopifySync__HIC_Webhook__c>();
+    System.debug('webhooksToUpdate***' + webhooksToUpdate);
+    for (UpdateWebhooksID__e event : Trigger.new) {
+        
+        HIC_ShopifySync__HIC_Webhook__c webhooks = new HIC_ShopifySync__HIC_Webhook__c();
+        webhooks.Id= event.webhookId__c;
+        webhooksToUpdate.add(webhooks);
+        System.debug('webhooksToUpdate**' + webhooksToUpdate);
+    }
+    if (!webhooksToUpdate.isEmpty()) {
+        UpdateWebhooksIDstriggerHandler.updateWebhooksMethod();
+    }
+}
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+     3. Create the handler to managed the callout asynchronously
+          --add required condition here 
+          --make callout 
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+public class UpdateWebhooksIDstriggerHandler {
+    @future(callout=true)
+    public static void updateWebhooksMethod() {
+        
+        List <HIC_ShopifySync__HIC_Configuration__c> config = [SELECT Id,HIC_ShopifySync__Store__c,HIC_ShopifySync__Private_Key_Password__c , HIC_ShopifySync__Salesforce_Site_URL__c ,HIC_ShopifySync__Shopify_URL__c from HIC_ShopifySync__HIC_Configuration__c where HIC_ShopifySync__Store__c!='Default'];
+        String PASSWORD = config[0].HIC_ShopifySync__Private_Key_Password__c;
+        String STORE = config[0].HIC_ShopifySync__Store__c;
+        String ShopifyUrl = config[0].HIC_ShopifySync__Shopify_URL__c;
+        String SalesforceUrl = config[0].HIC_ShopifySync__Salesforce_Site_URL__c;
+        
+        List<HIC_ShopifySync__HIC_Webhook__c> webhookList = [SELECT Id, HIC_ShopifySync__DML_Type__c, HIC_ShopifySync__SF_URL_Mapping__c, HIC_ShopifySync__Shopify_Object__c, HIC_ShopifySync__Store__c, HIC_ShopifySync__Topic__c, HIC_ShopifySync__Webhook_Id__c FROM HIC_ShopifySync__HIC_Webhook__c WHERE HIC_ShopifySync__Topic__c = 'customers/create' OR HIC_ShopifySync__Topic__c = 'customers/update'];
+        for (HIC_ShopifySync__HIC_Webhook__c webhook : webhookList) {
+            String requestBody = '{"webhook":{"id":"' + webhook.HIC_ShopifySync__Webhook_Id__c + '","address":"'+SalesforceUrl+'/services/apexrest/HIC_ShopifySync/'+webhook.HIC_ShopifySync__SF_URL_Mapping__c+'?objectname=Customer&DMLType=' + webhook.HIC_ShopifySync__DML_Type__c + '&store=' +STORE+ '","topic":"' + webhook.HIC_ShopifySync__Topic__c + '","format":"json","fields":[],"metafield_namespaces":["custom"],"api_version":"2023-10","private_metafield_namespaces":[]}}';
+            System.debug('requestBody**' + requestBody);
+            
+            String endPointValue = + ShopifyUrl +'/admin/api/2023-10/webhooks/' + webhook.HIC_ShopifySync__Webhook_Id__c + '.json';
+            System.debug('endPointValue**' + endPointValue);
+            
+            
+            //String requestBody = '{"webhook":{"id":1411618570552,"address":"https://dartaerospace--hicsme.sandbox.my.salesforce-sites.com/services/apexrest/HIC_ShopifySync/AuthenticateAllApexClass?objectname=Customer&DMLType=Update&store=dart-aero-dev","topic":"customers/update","created_at":"2023-10-11T03:40:18-04:00","updated_at":"2023-10-11T03:40:18-04:00","format":"json","fields":[],"metafield_namespaces":["custom"],"api_version":"2023-10","private_metafield_namespaces":[]}}';
+            //String endPointValue = 'https://dart-aero-dev.myshopify.com/admin/api/2023-10/webhooks/1411618570552.json';
+            String jsonResponse;
+            String error;
+            Http http = new Http();
+            HttpRequest request = new HttpRequest();
+            request.setEndpoint(endPointValue);
+            request.setMethod('PUT');
+           // request.setHeader('X-Shopify-Access-Token', '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');
+            request.setHeader('X-Shopify-Access-Token', PASSWORD);
+            request.setHeader('Content-Type', 'application/json');
+            request.setHeader('Accept', 'application/json');
+            request.setBody(requestBody);
+            HttpResponse response = new HttpResponse();
+            try {
+                System.debug('inTry');
+                response = http.send(request);
+                System.debug('response**' + response);
+                if (response.getStatusCode() == 400) {
+                    System.debug('Response Status: Bad Request (400)');
+                    System.debug('Response Body: ' + response.getBody());
+                    error = response.getBody();
+                } else if (response.getStatusCode() == 200) {
+                    String resBody = response.getBody();
+                    jsonResponse = response.getBody();
+                    System.debug('response**' + jsonResponse);
+                }
+            } catch (Exception e) {
+                System.debug('Exception ' + e.getMessage() + ' at line ' + e.getLineNumber());
+            }
+        }
+    }
+}
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Trigger UpdateDiscountLevel on Account (Before Insert, Before Update) {
+    for (Account acct : Trigger.new) {
+        if (acct.Shopify_meta_fields__c != null && acct.Shopify_meta_fields__c != '' &&
+            (!Trigger.isUpdate || acct.Shopify_meta_fields__c != Trigger.oldMap.get(acct.Id).Shopify_meta_fields__c)) {
+           
+            String metadatafields = acct.Shopify_meta_fields__c;
+            List<Object> metafields = (List<Object>) JSON.deserializeUntyped(metadatafields);
+            boolean foundCustomerGroup = false;
+
+            for (Object metaobj : metafields) {
+                Map<String, Object> metafieldMap = (Map<String, Object>) metaobj;
+                String key = (String) metafieldMap.get('key');
+                String value = String.valueOf(metafieldMap.get('value'));
+
+                if (key == 'customer_group' && !String.isBlank(value)) {
+                    acct.Discount_Level__c = value;
+                    foundCustomerGroup = true;
+                    break; 
+                }
+            }
+
+            if (!foundCustomerGroup) {
+                acct.Discount_Level__c = ' ';
+            }
+        } else if (acct.Shopify_meta_fields__c == null || acct.Shopify_meta_fields__c == '' || acct.Shopify_meta_fields__c =='[]') {
+           
+            if (acct.Discount_Level__c != null && acct.Discount_Level__c != '') {
+                Map<String, Object> newMetaField = new Map<String, Object>();
+                newMetaField.put('type', 'multi_line_text_field');
+                newMetaField.put('owner_resource', 'customer');
+                newMetaField.put('namespace', 'custom');
+                newMetaField.put('key', 'customer_group');
+                newMetaField.put('value', String.valueOf(acct.Discount_Level__c));
+                List<Object> newMetaFieldsList = new List<Object>{ newMetaField };
+                String newMetaFieldsJson = JSON.serialize(newMetaFieldsList);
+                acct.Shopify_meta_fields__c = newMetaFieldsJson;
+            }
+        } else {
+           
+            String metafields = acct.Shopify_meta_fields__c;
+            List<Object> metafieldsJson = (List<Object>) JSON.deserializeUntyped(metafields);
+            for (Object jsonMap : metafieldsJson) {
+                Map<String, Object> metafieldMap = (Map<String, Object>) jsonMap;
+                if (metafieldMap.containsKey('key') && metafieldMap.get('key').equals('customer_group')) {
+                    metafieldMap.put('value', String.valueOf(acct.Discount_Level__c));
+                    break;
+                }
+            }
+            String updatedJSON = JSON.serialize(metafieldsJson);
+            acct.Shopify_meta_fields__c = updatedJSON;
+        }
+    }
+}
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+@isTest
+public class UpdateWebhooksIDstriggerHandlerTest {
+    public class MockHttpResponse implements HttpCalloutMock {
+        public HTTPResponse respond(HTTPRequest req) {
+            HttpResponse res = new HttpResponse();
+            if (req.getMethod() == 'PUT' && req.getEndpoint().contains('')) {
+                res.setStatusCode(200);
+                res.setBody('{"success": true}');
+            } else {
+                res.setStatusCode(400);
+                res.setBody('{"error": "Bad Request"}');
+            }
+            return res;
+        }
+    }
+    
+    @isTest
+    static void UpdaeWebhooksIDstriggerMethod() {
+        HIC_ShopifySync__HIC_Webhook__c testWebhook = new HIC_ShopifySync__HIC_Webhook__c(
+            HIC_ShopifySync__Topic__c = 'customers/update',
+            HIC_ShopifySync__Webhook_Id__c = 'TestWebhookId'
+        );
+        insert testWebhook;
+        Map<Id, HIC_ShopifySync__HIC_Webhook__c> oldWebhooks = new Map<Id, HIC_ShopifySync__HIC_Webhook__c>{
+            testWebhook.Id => testWebhook
+                };
+                    testWebhook.HIC_ShopifySync__Webhook_Id__c = 'UpdatedWebhookId';
+        update testWebhook;
+    }
+    @isTest
+    static void testInsertAccountWithShopifyMetaFields() {
+        Account acct = new Account();
+        acct.Name = 'Test Account';
+        acct.Region__c = 'Canada';
+        acct.Shopify_meta_fields__c = '[{"key": "customer_group", "value": "Gold+"}]';
+        insert acct;
+    }
+    @isTest
+    static void testUpdateAccountWithShopifyMetaFields() {
+        Account acc = new Account();
+        acc.Name = 'Test';
+        acc.Region__c = 'Canada';
+        acc.Shopify_meta_fields__c = '[{"key": "customer_group", "value": "AMC"}]';
+        insert acc;
+        acc.Shopify_meta_fields__c = '[{"key": "customer_group", "value": "Gold+"}]';
+        update acc;
+    }
+@isTest
+    static void testUpdateWebhooksMethod1() {
+        HIC_ShopifySync__HIC_Configuration__c config = new HIC_ShopifySync__HIC_Configuration__c(
+            HIC_ShopifySync__Store__c = 'TestStore',
+            HIC_ShopifySync__Private_Key_Password__c = 'TestPassword',
+            HIC_ShopifySync__Salesforce_Site_URL__c = 'TestSalesforceUrl',
+            HIC_ShopifySync__Shopify_URL__c = 'TestShopifyUrl'
+        );
+        insert config;
+
+        HIC_ShopifySync__HIC_Webhook__c webhook = new HIC_ShopifySync__HIC_Webhook__c(
+            HIC_ShopifySync__DML_Type__c = 'Update',
+            HIC_ShopifySync__SF_URL_Mapping__c = 'TestMapping',
+            HIC_ShopifySync__Shopify_Object__c = 'TestObject',
+            HIC_ShopifySync__Store__c = 'TestStore',
+            HIC_ShopifySync__Topic__c = 'customers/update',
+            HIC_ShopifySync__Webhook_Id__c = '123456'
+        );
+        insert webhook;
+           Test.startTest();
+        Test.setMock(HttpCalloutMock.class, new MockHttpResponse());
+        UpdateWebhooksIDstriggerHandler.updateWebhooksMethod();
+        Test.stopTest();
+
+    }    
+     @isTest
+    static void testDiscountLevelUpdate() {
+        
+        Account testAccount = new Account(
+            Name = 'Test Account',
+            Region__c='Canada',
+            Shopify_meta_fields__c = '[{"key":"customer_group","value":"Gold"}]'
+        );
+        insert testAccount;
+
+       
+        testAccount = [SELECT Id, Discount_Level__c, Shopify_meta_fields__c FROM Account WHERE Id = :testAccount.Id LIMIT 1];
+        testAccount.Discount_Level__c = 'Platinum';
+        update testAccount;
+
+        testAccount = [SELECT Shopify_meta_fields__c FROM Account WHERE Id = :testAccount.Id LIMIT 1];
+        List<Object> metafieldsJson = (List<Object>) JSON.deserializeUntyped(testAccount.Shopify_meta_fields__c);
+        String discountLevel = '';
+        for (Object jsonMap : metafieldsJson) {
+            Map<String, Object> metafieldMap = (Map<String, Object>) jsonMap;
+            if (metafieldMap.containsKey('key') && metafieldMap.get('key').equals('customer_group')) {
+                discountLevel = String.valueOf(metafieldMap.get('value'));
+                break;
+            }
+        }
+        
+    }
+
+    @isTest
+    static void testDiscountLevelNull() {
+      
+        Account testAccount = new Account(
+            Name = 'Test Account',
+             Region__c='Canada',
+            Discount_Level__c = 'Silver'
+        );
+        insert testAccount;
+
+       
+        testAccount = [SELECT Id, Discount_Level__c, Shopify_meta_fields__c FROM Account WHERE Id = :testAccount.Id LIMIT 1];
+        testAccount.Shopify_meta_fields__c = null;
+        update testAccount;
+
+
+        testAccount = [SELECT Discount_Level__c FROM Account WHERE Id = :testAccount.Id LIMIT 1];
+        
+    }
+    @isTest
+    static void testeventplateformTriggerMethod() {
+        
+        HIC_ShopifySync__HIC_Configuration__c cnf = new HIC_ShopifySync__HIC_Configuration__c();
+        cnf.HIC_ShopifySync__Shopify_URL__c='https://www.google.com';
+        cnf.HIC_ShopifySync__API_Key__c = 'test21';
+        cnf.HIC_ShopifySync__Private_Key_Password__c = 'test12';
+        cnf.HIC_ShopifySync__Opportunity__c = True;
+        cnf.HIC_ShopifySync__Order__c= True;
+        cnf.HIC_ShopifySync__Opportunity_Line_Item__c = True;
+        cnf.HIC_ShopifySync__Order_Line_Item__c = True;
+        cnf.HIC_ShopifySync__Order_Fulfillment__c = True;
+        cnf.HIC_ShopifySync__Person_Account__c = True;
+        cnf.HIC_ShopifySync__Enable_Draft_Order__c = True;
+        cnf.HIC_ShopifySync__Inventory_Location__c = true;
+        cnf.HIC_ShopifySync__Store__c = 'test';
+        insert cnf;
+        
+        
+        HIC_ShopifySync__HIC_Webhook__c webhk =new HIC_ShopifySync__HIC_Webhook__c();
+        webhk.HIC_ShopifySync__DML_Type__c ='test';
+        webhk.HIC_ShopifySync__External_Id__c='test';
+        webhk.HIC_ShopifySync__SF_URL_Mapping__c='test';
+        webhk.HIC_ShopifySync__Shopify_Object__c='Order';
+        webhk.HIC_ShopifySync__Topic__c='test';
+        webhk.HIC_ShopifySync__Store__c='test';
+        insert webhk;         
+        
+        
+        UpdateWebhooksID__e event = new UpdateWebhooksID__e();
+        event.webhookId__c = webhk.id;
+        
+        List<HIC_ShopifySync__HIC_Webhook__c> webhooksToUpdate = new List<HIC_ShopifySync__HIC_Webhook__c>();
+        HIC_ShopifySync__HIC_Webhook__c webhooks = new HIC_ShopifySync__HIC_Webhook__c();
+        webhooks.Id= event.webhookId__c;
+        webhooksToUpdate.add(webhooks);
+        
+        Test.startTest();
+        EventBus.publish(event);
+        Test.stopTest();
+        
+    }
+
+}
