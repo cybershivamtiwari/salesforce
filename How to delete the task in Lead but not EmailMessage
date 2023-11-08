@@ -1,0 +1,85 @@
+global class DeleteTasksBatch implements Database.Batchable<Sobject> {
+      private Set<Id> leadIdsVsTasks;
+      global DeleteTasksBatch(Set<Id> leadIds) {
+          this.leadIdsVsTasks = new Set<Id>();
+          if(leadIds != null && !leadIds.isEmpty()){
+              this.leadIdsVsTasks.addAll(leadIds);
+          }
+          /*else{
+              this.leadIdsVsTasks = new Set<Id>();
+              List<AggregateResult> taskRelatedLeads = [
+                  SELECT WhoId FROM Task WHERE WhoId != null GROUP BY WhoId];
+              
+              for (AggregateResult aggResult : taskRelatedLeads) {
+                  Id leadId = (Id)aggResult.get('WhoId');
+                  leadIdsVsTasks.add(leadId);
+              }
+          }*/
+    }
+
+    global Database.QueryLocator start(Database.BatchableContext context) {
+        
+        String query = 'SELECT Id, Email, (SELECT Id, Subject, CreatedDate FROM Tasks limit 200) FROM Lead';
+        if(!leadIdsVsTasks.isEmpty()){
+             query += ' WHERE Id IN :leadIdsVsTasks';
+        }
+        system.debug('query++'+query);
+        return Database.getQueryLocator(query);
+    }
+    
+    global void execute(Database.BatchableContext context, List<Lead> scope) {
+        Set<string> leadEmailsWithTasks = new Set<string>();
+        Map<string, List<EmailMessage>> leadToEmailMessagesMap = new Map<string, List<EmailMessage>>();
+        List<Task> tasksToDelete = new List<Task>();
+        
+        for (Lead lead : scope) {
+            if (!lead.Tasks.isEmpty()) {
+                leadEmailsWithTasks.add(lead.Email);
+            }
+        }
+        
+        if (!leadEmailsWithTasks.isEmpty()) {
+            List<EmailMessage> emailMessages = [SELECT Id, Subject, CreatedDate, ToAddress FROM EmailMessage WHERE ToAddress IN :leadEmailsWithTasks];
+            
+            for (EmailMessage emailMsg : emailMessages) {
+                if (!leadToEmailMessagesMap.containsKey(emailMsg.ToAddress)) {
+                    leadToEmailMessagesMap.put(emailMsg.ToAddress, new List<EmailMessage>());
+                }
+                leadToEmailMessagesMap.get(emailMsg.ToAddress).add(emailMsg);
+            }
+            
+            for (Lead lead : scope) {
+                if (leadToEmailMessagesMap.containsKey(lead.Email)) {
+                    for (Task task : lead.Tasks) {
+                        if (leadToEmailMessagesMap.get(lead.Email) != null) {
+                            for (EmailMessage emailMsg : leadToEmailMessagesMap.get(lead.Email)) {
+                                if (emailMsg.Subject == task.Subject) {
+                                    DateTime taskCreatedDate = task.CreatedDate;
+                                    DateTime emailMsgCreatedDate = emailMsg.CreatedDate;
+                                    Integer minutesDifference = (Integer)((taskCreatedDate.getTime() - emailMsgCreatedDate.getTime()) /60000);    
+                                    if (Math.abs(minutesDifference) <= 2) {
+                                        tasksToDelete.add(task);
+                                        system.debug('tasksToDelete+++'+tasksToDelete);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+          system.debug('tasksToDelete++'+tasksToDelete);
+        if (!tasksToDelete.isEmpty()) {
+            delete tasksToDelete;
+        }
+    }
+
+    public void finish(Database.BatchableContext context) {
+    }
+}
+
+
+
+
+
+
