@@ -1,0 +1,38 @@
+trigger UpdateShipMethodOnOrder on Order (before insert, before update) {
+    for (Order ord : Trigger.new) {
+        System.debug('ord.Shopify_shipping_line_method__c: ' + ord.Shopify_shipping_line_method__c);
+        System.debug('String.isNotBlank(ord.Shopify_shipping_line_method__c) ' + String.isNotBlank(ord.Shopify_shipping_line_method__c));
+        System.debug('String.isNotBlank(Trigger.oldMap.get(ord.Id).Shopify_shipping_line_method__c)' + String.isNotBlank(Trigger.oldMap.get(ord.Id).Shopify_shipping_line_method__c));
+        if (ord.Shopify_shipping_line_method__c !=null && ord.Shopify_shipping_line_method__c != '' &&  (Trigger.isInsert ||
+            ( ord.Shopify_shipping_line_method__c != Trigger.oldMap.get(ord.Id).Shopify_shipping_line_method__c))) {
+            
+            String metadataString = ord.Shopify_shipping_line_method__c;
+            System.debug('metadataString: ' + metadataString);
+            
+            try {
+                List<Object> metadataList = (List<Object>) JSON.deserializeUntyped(metadataString);
+                
+                if (!metadataList.isEmpty() && metadataList[0] instanceof Map<String, Object>) {
+                    Map<String, Object> rootMap = (Map<String, Object>) metadataList[0];
+                    if (rootMap.containsKey('title')) {
+                        String shipMethodValue = String.valueOf(rootMap.get('title'));
+                        System.debug('title value: ' + shipMethodValue);
+                        
+                        if (String.isNotBlank(shipMethodValue)) {
+                            ord.Ship_Method__c = 'Advanced Shipping Rules, ' + shipMethodValue;
+                        } else {
+                            System.debug('Title is blank in the JSON.');
+                        }
+                    } else {
+                        System.debug('Title key not found in the JSON.');
+                    }
+                } else {
+                    System.debug('Invalid JSON format or empty array.');
+                }
+            } catch (Exception e) {
+                System.debug('Error parsing JSON: ' + e.getMessage());
+            }
+        }
+        
+    }
+}
