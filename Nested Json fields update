@@ -1,0 +1,90 @@
+trigger UpdatePromoCodeTriggerHandler on Opportunity (before insert, before update) {
+    for (Opportunity opp : trigger.new) {
+        if (opp.shopify_meta_fields__c != null && opp.shopify_meta_fields__c != '' && (Trigger.isInsert ||
+                opp.shopify_meta_fields__c != Trigger.oldMap.get(opp.Id).shopify_meta_fields__c)) {
+
+            String metadapromotaString = opp.shopify_meta_fields__c;
+            System.debug('metadapromotaString: ' + metadapromotaString);
+
+            try {
+                List<Object> metadataList = (List<Object>) JSON.deserializeUntyped(metadapromotaString);
+
+                for (Object metadata : metadataList) {
+                    if (metadata instanceof Map<String, Object>) {
+                        Map<String, Object> rootMap = (Map<String, Object>) metadata;
+                        if (rootMap.containsKey('properties') && rootMap.get('properties') instanceof List<Object>) {
+                            List<Object> propertiesList = (List<Object>) rootMap.get('properties');
+                            for (Object property : propertiesList) {
+                                if (property instanceof Map<String, Object>) {
+                                    Map<String, Object> propertyMap = (Map<String, Object>) property;
+                                    if (propertyMap.containsKey('name') && propertyMap.get('name') instanceof String &&
+                                        propertyMap.containsKey('value') && propertyMap.get('value') instanceof String) {
+                                        String name = String.valueOf(propertyMap.get('name'));
+                                        String value = String.valueOf(propertyMap.get('value'));
+
+                                        if ('_discount_name'.equals(name) && String.isNotBlank(value)) {
+                                            opp.Promo_Code__c = value;
+                                            System.debug('_discount_name value: ' + value);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.debug('Error parsing JSON: ' + e.getMessage());
+            }
+        }
+    }
+}
+trigger UpdateShipMethodOnOrder on Order (before insert, before update) {
+    for (Order ord : Trigger.new) {
+        if (ord.Shopify_shipping_line_method__c !=null && ord.Shopify_shipping_line_method__c != '' &&  (Trigger.isInsert ||  
+            (Trigger.oldMap.get(ord.Id).Shopify_shipping_line_method__c!=null && Trigger.oldMap.get(ord.Id).Shopify_shipping_line_method__c!=''  &&  ord.Shopify_shipping_line_method__c != Trigger.oldMap.get(ord.Id).Shopify_shipping_line_method__c))) {
+            
+            String metadataString = ord.Shopify_shipping_line_method__c;
+            System.debug('metadataString: ' + metadataString);
+            
+            try {
+                List<Object> metadataList = (List<Object>) JSON.deserializeUntyped(metadataString);
+                
+                if (!metadataList.isEmpty() && metadataList[0] instanceof Map<String, Object>) {
+                    Map<String, Object> rootMap = (Map<String, Object>) metadataList[0];
+                    if (rootMap.containsKey('title')) {
+                        String shipMethodValue = String.valueOf(rootMap.get('title'));
+                        System.debug('title value: ' + shipMethodValue);
+                        
+                        if (String.isNotBlank(shipMethodValue)) {
+                            ord.Ship_Method__c = 'Advanced Shipping Rules, ' + shipMethodValue;
+                        } else {
+                            System.debug('Title is blank in the JSON.');
+                        }
+                    } else {
+                        System.debug('Title key not found in the JSON.');
+                    }
+                } else {
+                    System.debug('Invalid JSON format or empty array.');
+                }
+            } catch (Exception e) {
+                System.debug('Error parsing JSON: ' + e.getMessage());
+            }
+        }
+        if(ord.Shopify_order_fulfillment_status__c !=null  && ord.Shopify_order_fulfillment_status__c !='' && (Trigger.isInsert || ( ord.Shopify_order_fulfillment_status__c != Trigger.oldMap.get(ord.Id).Shopify_order_fulfillment_status__c))){
+            if(ord.Shopify_order_fulfillment_status__c =='fulfilled'){
+                ord.Shopify_Fulfillment_Status__c='Fulfilled';
+            }
+            else {
+                 ord.Shopify_Fulfillment_Status__c='Unfulfilled';
+            }
+            
+        }
+        if(ord.Status!='Activated' && (Trigger.isInsert || Trigger.isUpdate)){
+            if(ord.HIC_ShopifySync__Payment_Status__c =='paid'){
+                ord.Status='Activated';
+            }
+            
+        }
+        
+    }
+}
