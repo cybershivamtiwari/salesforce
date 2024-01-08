@@ -1,0 +1,67 @@
+trigger UpdatePromoCodeTriggerHandler on Opportunity (before insert, before update) {
+    Map<Id, String> opportunityDiscountMap = new Map<Id, String>();
+    Set<Id> opportunityIds = new Set<Id>();
+
+    // Collect Opportunity Ids to query
+    for (Opportunity opp : trigger.new) {
+        if (opp.shopify_meta_fields__c != null && opp.shopify_meta_fields__c != '' &&
+            (Trigger.isInsert || opp.shopify_meta_fields__c != Trigger.oldMap.get(opp.Id).shopify_meta_fields__c)) {
+            opportunityIds.add(opp.Id);
+        }
+    }
+
+    // Query relevant data and populate opportunityDiscountMap
+    if (!opportunityIds.isEmpty()) {
+        List<Opportunity> opportunitiesWithMeta = [
+            SELECT Id, shopify_meta_fields__c
+            FROM Opportunity
+            WHERE Id IN :opportunityIds AND shopify_meta_fields__c != null AND shopify_meta_fields__c != ''
+        ];
+
+        for (Opportunity opp : opportunitiesWithMeta) {
+            String metadapromotaString = opp.shopify_meta_fields__c;
+            System.debug('metadapromotaString: ' + metadapromotaString);
+
+            try {
+                List<Object> metadataList = (List<Object>) JSON.deserializeUntyped(metadapromotaString);
+
+                for (Object metadata : metadataList) {
+                    if (metadata instanceof Map<String, Object>) {
+                        Map<String, Object> rootMap = (Map<String, Object>) metadata;
+
+                        if (rootMap.containsKey('properties') && rootMap.get('properties') instanceof List<Object>) {
+                            List<Object> propertiesList = (List<Object>) rootMap.get('properties');
+
+                            Map<String, String> propertyMap = new Map<String, String>();
+                            for (Object property : propertiesList) {
+                                if (property instanceof Map<String, Object>) {
+                                    Map<String, Object> propMap = (Map<String, Object>) property;
+
+                                    if (propMap.containsKey('name') && propMap.containsKey('value') &&
+                                        propMap.get('name') instanceof String && propMap.get('value') instanceof String) {
+                                        propertyMap.put(String.valueOf(propMap.get('name')), String.valueOf(propMap.get('value')));
+                                    }
+                                }
+                            }
+
+                            String discountName = propertyMap.get('_discount_name');
+                            if (String.isNotBlank(discountName)) {
+                                opportunityDiscountMap.put(opp.Id, discountName);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                System.debug('Error parsing JSON: ' + e.getMessage());
+            }
+        }
+    }
+
+    // Update opportunities in bulk
+    for (Opportunity opp : trigger.new) {
+        if (opportunityDiscountMap.containsKey(opp.Id)) {
+            opp.Promo_Code__c = opportunityDiscountMap.get(opp.Id);
+            System.debug('_discount_name value for Opportunity Id ' + opp.Id + ': ' + opp.Promo_Code__c);
+        }
+    }
+}
