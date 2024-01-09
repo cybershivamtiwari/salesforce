@@ -1,0 +1,100 @@
+public class AccOwnerDistribution {
+    public static void handleNewAccounts(List<Account> newAccounts) {
+        Map<Id, Integer> userAccountCountMap = new Map<Id, Integer>();
+        Set<Id> userIds = new Set<Id>();
+        for (GroupMember member : [SELECT UserOrGroupId FROM GroupMember WHERE GroupId IN (SELECT Id FROM Group WHERE DeveloperName = 'TestingGroup')]) {
+            userIds.add((Id) member.UserOrGroupId);
+        }
+        for (Id userId : userIds) {
+            userAccountCountMap.put(userId, 0);
+        }
+        for (AggregateResult aggregate : [SELECT OwnerId, COUNT(Id) accountCount 
+                                          FROM Account 
+                                          WHERE OwnerId IN :userAccountCountMap.keySet() 
+                                          GROUP BY OwnerId]) {
+            Id userId = (Id) aggregate.get('OwnerId');
+            Integer accountCount = (Integer) aggregate.get('accountCount');
+            userAccountCountMap.put(userId, accountCount);
+        }
+        for (Account newAccount : newAccounts) {
+            Id selectedUserIdToAssign = null;
+            Integer minAccountCount = 2147483647;
+            List<Id> usersWithMinCount = new List<Id>();
+
+            for (Id userId : userAccountCountMap.keySet()) {
+                Integer accountCount = userAccountCountMap.get(userId);
+
+                if (accountCount < minAccountCount) {
+                    minAccountCount = accountCount;
+                    usersWithMinCount.clear();
+                    usersWithMinCount.add(userId);
+                } else if (accountCount == minAccountCount) {
+                    usersWithMinCount.add(userId);
+                }
+            }
+            if (!usersWithMinCount.isEmpty()) {
+                Integer randomIndex = Math.mod(Math.abs(Crypto.getRandomInteger()), usersWithMinCount.size());
+                selectedUserIdToAssign = usersWithMinCount[randomIndex];
+            }
+            userAccountCountMap.put(selectedUserIdToAssign, minAccountCount + 1);
+
+            newAccount.OwnerId = selectedUserIdToAssign;
+        }
+    }
+}
+4:10
+trigger AccOwnerDistribution on Account (before insert) {
+    AccOwnerDistribution.handleNewAccounts(Trigger.new);
+}
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+public class AccOwnerDistribution {
+    public static void handleNewAccounts(List<Account> newAccounts) {
+        Map<Id, Integer> userAccountCountMap = new Map<Id, Integer>();
+        Set<Id> userIds = new Set<Id>();
+        for (GroupMember member : [SELECT UserOrGroupId FROM GroupMember WHERE GroupId IN (SELECT Id FROM Group WHERE DeveloperName = 'TestingGroup')]) {
+            userIds.add((Id) member.UserOrGroupId);
+        }
+        for (Id userId : userIds) {
+            userAccountCountMap.put(userId, 0);
+        }
+        for (AggregateResult aggregate : [SELECT OwnerId, COUNT(Id) accountCount 
+                                          FROM Account 
+                                          WHERE OwnerId IN :userAccountCountMap.keySet() 
+                                          GROUP BY OwnerId]) {
+            Id userId = (Id) aggregate.get('OwnerId');
+            Integer accountCount = (Integer) aggregate.get('accountCount');
+            userAccountCountMap.put(userId, accountCount);
+        }
+        for (Account newAccount : newAccounts) {
+            Id selectedUserIdToAssign = null;
+            Integer minAccountCount = 2147483647;
+            List<Id> usersWithMinCount = new List<Id>();
+
+            for (Id userId : userAccountCountMap.keySet()) {
+                Integer accountCount = userAccountCountMap.get(userId);
+
+                if (accountCount < minAccountCount) {
+                    minAccountCount = accountCount;
+                    usersWithMinCount.clear();
+                    usersWithMinCount.add(userId);
+                } else if (accountCount == minAccountCount) {
+                    usersWithMinCount.add(userId);
+                }
+            }
+            if (!usersWithMinCount.isEmpty()) {
+                Integer randomIndex = Math.mod(Math.abs(Crypto.getRandomInteger()), usersWithMinCount.size());
+                selectedUserIdToAssign = usersWithMinCount[randomIndex];
+            }
+            userAccountCountMap.put(selectedUserIdToAssign, minAccountCount + 1);
+
+            newAccount.OwnerId = selectedUserIdToAssign;
+        }
+    }
+}
+
+
+
+
+
+
