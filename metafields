@@ -1,0 +1,179 @@
+if (acct.Shopify_meta_fields__c != null && acct.Shopify_meta_fields__c != '' &&
+            (!Trigger.isUpdate || acct.Shopify_meta_fields__c != Trigger.oldMap.get(acct.Id).Shopify_meta_fields__c)) {
+           
+            String metadatafields = acct.Shopify_meta_fields__c;
+            List<Object> metafields = (List<Object>) JSON.deserializeUntyped(metadatafields);
+            boolean foundCustomerGroup = false;
+
+            for (Object metaobj : metafields) {
+                Map<String, Object> metafieldMap = (Map<String, Object>) metaobj;
+                String key = (String) metafieldMap.get('key');
+                String value = String.valueOf(metafieldMap.get('value'));
+
+                if (key == 'customer_group' && !String.isBlank(value)) {
+                    acct.Discount_Level__c = value;
+                    foundCustomerGroup = true;
+                    break; 
+                }
+            }
+
+            if (!foundCustomerGroup) {
+                acct.Discount_Level__c = ' ';
+            }
+        } 
+        else if (acct.Shopify_meta_fields__c == null || acct.Shopify_meta_fields__c == '' || acct.Shopify_meta_fields__c =='[]') {
+           
+            if (acct.Discount_Level__c != null && acct.Discount_Level__c != '') {
+                Map<String, Object> newMetaField = new Map<String, Object>();
+                newMetaField.put('type', 'multi_line_text_field');
+                newMetaField.put('owner_resource', 'customer');
+                newMetaField.put('namespace', 'custom');
+                newMetaField.put('key', 'customer_group');
+                newMetaField.put('value', String.valueOf(acct.Discount_Level__c));
+                List<Object> newMetaFieldsList = new List<Object>{ newMetaField };
+                String newMetaFieldsJson = JSON.serialize(newMetaFieldsList);
+                acct.Shopify_meta_fields__c = newMetaFieldsJson;
+            }
+        } 
+        else {
+           
+            String metafields = acct.Shopify_meta_fields__c;
+            List<Object> metafieldsJson = (List<Object>) JSON.deserializeUntyped(metafields);
+            for (Object jsonMap : metafieldsJson) {
+                Map<String, Object> metafieldMap = (Map<String, Object>) jsonMap;
+                if (metafieldMap.containsKey('key') && metafieldMap.get('key').equals('customer_group')) {
+                    metafieldMap.put('value', String.valueOf(acct.Discount_Level__c));
+                    break;
+                }
+            }
+            String updatedJSON = JSON.serialize(metafieldsJson);
+            acct.Shopify_meta_fields__c = updatedJSON;
+        }
+
+
+Trigger UpdateMetafields on Product2 (Before Insert, Before Update) {
+    Map<String, String> metaKeyVSsfFieldMap = new Map<String, String>{'compatible_with'=>'Compatible_With__c','plex_lead_time'=>'plex_lead_time__c' };
+        for (Product2 products : Trigger.new) {
+            system.debug('products.Shopify_meta_fields__c>>'+products.Shopify_meta_fields__c);
+            if (products.Shopify_meta_fields__c != null && products.Shopify_meta_fields__c != '' &&
+                (!Trigger.isUpdate || products.Shopify_meta_fields__c != Trigger.oldMap.get(products.Id).Shopify_meta_fields__c)) {
+                    system.debug('line6>>if');
+                    String metadatafields = products.Shopify_meta_fields__c;
+                    system.debug('metadatafields>>'+metadatafields);
+                    List<Object> metafields = (List<Object>) JSON.deserializeUntyped(metadatafields);
+                    system.debug('metafields>>'+metafields);
+                    boolean foundcomptiblewith = false;
+                    for (Object metaobj : metafields) {
+                        Map<String, Object> metafieldMap = (Map<String, Object>) metaobj;
+                        String key = (String) metafieldMap.get('key');
+                        system.debug('key>>'+key);
+                        String value = String.valueOf(metafieldMap.get('value'));
+                        system.debug('value>>'+value);
+                        
+                        
+                        if (key == 'compatible_with' && !String.isBlank(value)) {
+                            products.Compatible_With__c = value; 
+                            foundcomptiblewith = true;
+                        }
+						if (key == 'plex_lead_time' && !String.isBlank(value)) {
+                            products.plex_lead_time__c = Decimal.valueof(value);
+                            plexleadtime = true; 
+                        }
+                        
+                        
+                    }
+                    
+                    if (!foundcomptiblewith) {
+                        products.Compatible_With__c = ' ';
+                    }
+					if (!plexleadtime) {
+                        products.plex_lead_time__c = null;
+                    }
+                    
+                } 
+            else if (products.Shopify_meta_fields__c == null || products.Shopify_meta_fields__c == '' || products.Shopify_meta_fields__c =='[]') {
+                List<Object> objectList = new List<Object>();
+                
+                if (products.Compatible_With__c != null && products.Compatible_With__c != '') {
+                    Map<String, Object> instanceMap = new Map<String, Object>();
+                    instanceMap.put('type', 'multi_line_text_field');
+                    instanceMap.put('owner_resource', 'product');
+                    instanceMap.put('namespace', 'custom');
+                    instanceMap.put('key', 'compatible_with');
+                    instanceMap.put('value', String.valueOf(products.Compatible_With__c));
+                    objectList.add(instanceMap);
+                }
+                
+                if (products.plex_lead_time__c != null ) {
+                    Map<String, Object> instanceMap = new Map<String, Object>();
+                    instanceMap.put('type', 'multi_line_text_field');
+                    instanceMap.put('owner_resource', 'product');
+                    instanceMap.put('namespace', 'custom');
+                    instanceMap.put('key', 'plex_lead_time');
+                    instanceMap.put('value', String.valueOf(products.plex_lead_time__c));
+                    objectList.add(instanceMap);
+                }
+                
+                String newMetaFieldsJson = JSON.serialize(objectList);
+                System.debug('New Meta Fields JSON: ' + newMetaFieldsJson);
+                products.Shopify_meta_fields__c = newMetaFieldsJson;
+                
+                System.debug('Updating record: ' + products);
+                
+            }
+            else {
+                List<Object> metafieldList = new List<Object>();
+                Map<String, Map<String, Object>> keyvsmetadataMap = new Map<String, Map<String, Object>>();
+                String metafields = products.Shopify_meta_fields__c;
+                system.debug('metafields>>'+metafields);
+                List<Object> metafieldsJson = (List<Object>) JSON.deserializeUntyped(metafields);
+                for (Object jsonMap : metafieldsJson) {
+                    Map<String, Object> metafieldMap = (Map<String, Object>) jsonMap;
+                    String keyName = String.valueof(metafieldMap.get('key'));
+                    keyvsmetadataMap.put(keyName, (Map<String, Object>)JSON.deserializeUntyped(JSON.serialize(jsonMap)));
+                    system.debug('keyName>>'+keyName);
+                 /*   if(products.get(metaKeyVSsfFieldMap.get(keyName)) != null && products.get(metaKeyVSsfFieldMap.get(keyName)) != ''){
+                        metafieldMap.put('value', products.get(metaKeyVSsfFieldMap.get(keyName)));
+                        system.debug('metafieldMap500>>'+metafieldMap);
+                        String updatedJSON = JSON.serialize(metafieldsJson);
+                        products.Shopify_meta_fields__c = updatedJSON;
+                    }*/
+                }
+                String shopifymetafieldnew = products.Shopify_meta_fields__c;
+                system.debug('shopifymetafieldnew>>'+shopifymetafieldnew);
+                List<Object> objectList = (List<Object>) JSON.deserializeUntyped(shopifymetafieldnew);
+                
+                if (products.Compatible_With__c != null && products.Compatible_With__c != '') {
+                    if(!keyvsmetadataMap.isEmpty() && keyvsmetadataMap.containsKey('compatible_with')){
+                        keyvsmetadataMap.get('compatible_with').put('value', products.Compatible_With__c);
+                    }else{
+                        Map<String, String> metafieldsMap = new Map<String, String>();
+                        metafieldsMap.put('type', 'multi_line_text_field');
+                        metafieldsMap.put('owner_resource', 'product');
+                        metafieldsMap.put('namespace', 'custom');
+                        metafieldsMap.put('key', 'compatible_with');
+                        metafieldsMap.put('value', products.Compatible_With__c);
+                        keyvsmetadataMap.put('compatible_with', metafieldsMap);
+                    }
+                }
+                
+                if (products.plex_lead_time__c != null ) {
+                    if(!keyvsmetadataMap.isEmpty() && keyvsmetadataMap.containsKey('plex_lead_time')){
+                        keyvsmetadataMap.get('plex_lead_time').put('value', products.plex_lead_time__c);
+                    }else{
+                        Map<String, String> metafieldsMap = new Map<String, String>();
+                        metafieldsMap.put('type', 'multi_line_text_field');
+                        metafieldsMap.put('owner_resource', 'product');
+                        metafieldsMap.put('namespace', 'custom');
+                        metafieldsMap.put('key', 'plex_lead_time');
+                        metafieldsMap.put('value', String.valueof(products.plex_lead_time__c));
+                        keyvsmetadataMap.put('plex_lead_time', metafieldsMap);
+                    }
+                }
+                metafieldList.addAll(keyvsmetadataMap.values());
+                String newMetaFieldsJson = JSON.serialize(metafieldList);
+                products.Shopify_meta_fields__c = newMetaFieldsJson;
+                
+            }
+        }
+}
