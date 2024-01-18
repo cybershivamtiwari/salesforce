@@ -1,0 +1,13 @@
+List<HIC_ShopifySync__HIC_Field_Mapping__c> fmListToUpsert = new List<HIC_ShopifySync__HIC_Field_Mapping__c>();
+
+for(HIC_ShopifySync__HIC_Field_Mapping__c oldMapping : [select Id, OwnerId, Name, HIC_ShopifySync__Default_Value__c, HIC_ShopifySync__External_ID__c, HIC_ShopifySync__IsSFID__c, HIC_ShopifySync__Nested__c, HIC_ShopifySync__Object_Name__c, HIC_ShopifySync__SF_Field_Type__c, HIC_ShopifySync__SF_Field__c, HIC_ShopifySync__Shopify_Field_Type__c, HIC_ShopifySync__Shopify_Fields__c, HIC_ShopifySync__Store_External_ID__c, HIC_ShopifySync__Store__c from HIC_ShopifySync__HIC_Field_Mapping__c where HIC_ShopifySync__Store__c ='shivamemporium']){
+	
+	HIC_ShopifySync__HIC_Field_Mapping__c cloneField = oldMapping.clone(false, false, false, false);
+	cloneField.HIC_ShopifySync__Store_External_ID__c = oldMapping.HIC_ShopifySync__Store_External_ID__c != null
+            ? oldMapping.HIC_ShopifySync__Store_External_ID__c.replace('shivamemporium', '')
+            : null; 
+	cloneField.HIC_ShopifySync__Store__c = 'Default'; 
+	fmListToUpsert.add(cloneField);
+}
+        
+Upsert fmListToUpsert HIC_ShopifySync__Store_External_ID__c;
