@@ -1,0 +1,18 @@
+LeadStatus convertStatus = [select MasterLabel from LeadStatus where IsConverted = true limit 1];
+    List <Database.LeadConvert> leadConverts = new List < Database.LeadConvert > ();
+
+    for (Lead lead: [Select ID, Name, isConverted,Email,Company, OwnerID From Lead Where Email='tiwariindustry@gmail.com']) {
+      if (!lead.isConverted) {
+        Database.LeadConvert lc = new Database.LeadConvert();
+            
+        lc.setLeadId(lead.Id);
+        lc.setOpportunityName(lead.Name);
+        lc.setConvertedStatus(convertStatus.MasterLabel);
+
+        leadConverts.add(lc);
+      }
+    }
+
+    if (!leadConverts.isEmpty()) {
+      List < Database.LeadConvertResult > lcr = Database.convertLead(leadConverts);
+    }
