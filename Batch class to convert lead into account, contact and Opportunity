@@ -1,0 +1,73 @@
+Batch Code
+
+                           
+    global class LeadConvert implements Database.Batchable {
+    
+    global Database.QueryLocator start(Database.BatchableContext BC) {  
+        String query = 'SELECT Id, Name, Converted__c, 
+        LeadSource FROM Lead where LeadSource = \'Conference\' AND isConverted = False';
+        return Database.getQueryLocator(query);
+    }
+     
+    global void execute(Database.BatchableContext BC, List ldList) {
+        String convertedLabel = [SELECT Id, 
+        MasterLabel FROM LeadStatus WHERE IsConverted=true LIMIT 1].MasterLabel;
+        List listOfLeadToConvert = new List();
+        for(Lead leadRecord:ldList){
+            Database.LeadConvert leadConvert = new Database.LeadConvert();
+            leadConvert.setLeadId(leadRecord.Id);
+            leadConvert.setConvertedStatus(convertedLabel);
+         listOfLeadToConvert.add(leadConvert);    
+      }
+   
+        if(!listOfLeadToConvert.isEmpty()) {
+            List 
+               convertResults = Database.convertLead(listOfLeadToConvert);
+            system.debug(convertResults);
+        }
+    }   
+     
+    global void finish(Database.BatchableContext BC) {
+           system.debug('Batch Running');
+    }
+}
+Schedule Batch Class
+
+   
+
+public class LeadConvertBatchSch implements Schedulable{
+    public void execute(SchedulableContext sc){
+       LeadConvert leadObj = new LeadConvert();
+       Database.executeBatch(leadObj);
+    }
+}
+
+Test Class
+
+
+
+@isTest
+public class LeadConvertTest {
+   @testSetup
+    public static void LeadMethod(){
+        Lead ld = new Lead();
+        ld.FirstName = 'Anurag';
+        ld.LastName =  'Tripathi';
+        ld.Company = 'Astrea IT Services';
+        ld.LeadSource = 'Conference';
+        
+        insert ld;
+        
+    }
+    
+    @isTest
+    public static void testBatchExecuteMethod()
+    { 
+        Test.startTest();     
+        LeadConvert leadObj = new LeadConvert();
+        Database.executeBatch(leadObj);
+        //System.schedule('Schedule Job Name 1',  '0 00 * * * ?', 
+        new LeadConvertBatchSch());
+        Test.stopTest();
+    }      
+}
