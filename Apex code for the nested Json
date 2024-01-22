@@ -1,0 +1,91 @@
+apex class -
+public class UpdatePromoCodeTriggerHandler {
+    public static void updatePromoCode(List<Opportunity> OppList, Map<Id, Opportunity> oldOppMap) {
+        for (Opportunity opp : OppList) {     
+            if (opp.shopify_meta_fields__c != null && opp.shopify_meta_fields__c != '' &&
+                (!Trigger.isUpdate  || ( oldOppMap.get(opp.Id).shopify_meta_fields__c != null && oldOppMap.get(opp.Id).shopify_meta_fields__c != '' && opp.shopify_meta_fields__c != oldOppMap.get(opp.Id).shopify_meta_fields__c))) {
+                    String metadapromotaString = opp.shopify_meta_fields__c;
+                    
+                    try {
+                        List<Object> metadataList = (List<Object>) JSON.deserializeUntyped(metadapromotaString);
+                        
+                        for (Object metadata : metadataList) {
+                            if (metadata instanceof Map<String, Object>) {
+                                Map<String, Object> rootMap = (Map<String, Object>) metadata;
+                                
+                                if (rootMap.containsKey('properties') && rootMap.get('properties') instanceof List<Object>) {
+                                    List<Object> propertiesList = (List<Object>) rootMap.get('properties');
+                                    
+                                    Map<String, String> propertyMap = new Map<String, String>();
+                                    for (Object property : propertiesList) {
+                                        if (property instanceof Map<String, Object>) {
+                                            Map<String, Object> propMap = (Map<String, Object>) property;
+                                            
+                                            if (propMap.containsKey('name') && propMap.containsKey('value') &&
+                                                propMap.get('name') instanceof String && propMap.get('value') instanceof String) {
+                                                    propertyMap.put(String.valueOf(propMap.get('name')), String.valueOf(propMap.get('value')));
+                                                }
+                                        }
+                                    }
+                                    
+                                    String discountName = propertyMap.get('_discount_name');
+                                    if (String.isNotBlank(discountName)) {
+                                         opp.Promo_Code__c =discountName;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        System.debug('Error parsing JSON: ' + e.getMessage());
+                    }
+                }
+             if (opp.HIC_ShopifySync__Total_Price__c != null &&
+                (!Trigger.isUpdate || (oldOppMap != null && oldOppMap.containsKey(opp.Id) &&  oldOppMap.get(opp.Id).HIC_ShopifySync__Total_Price__c != null &&  opp.HIC_ShopifySync__Total_Price__c != oldOppMap.get(opp.Id).HIC_ShopifySync__Total_Price__c))) {
+                                           opp.Total_Price__c = opp.HIC_ShopifySync__Total_Price__c;
+                                       } 
+            }
+      
+    }
+}
+
+
+testclass-
+@isTest
+public class UpdatePromoCodeTriggerHandlerTest {
+    @isTest
+    static void testUpdatePromoCode1() {
+        Opportunity opp = new Opportunity(
+            Name = 'Test Opportunity',
+            StageName = 'Prospecting',
+            CloseDate = System.today(),
+            shopify_meta_fields__c = '{"properties": [{"name": "_discount_name", "value": "DISCOUNT123"}]}',
+            HIC_ShopifySync__Total_Price__c = 1000.00,
+            Promo_Code__c='0%_off_for_25_patches#25%_off_for_50_patches#35%_off_for_100_patches#55%_off_for_200_patches#65%_off_for_500_patches#70%_off_for_1000_patches'
+        );
+
+        insert opp;
+        Opportunity updatedOpp = [SELECT Id, shopify_meta_fields__c, HIC_ShopifySync__Total_Price__c FROM Opportunity WHERE Id = :opp.Id];
+        updatedOpp.shopify_meta_fields__c = '{"properties": [{"name": "_discount_name", "value": "UPDATED_DISCOUNT"}]}';
+        updatedOpp.HIC_ShopifySync__Total_Price__c = 1500.00;
+        updatedOpp.Promo_Code__c='0%_off_for_25_patches#25%_off_for_50_patches#35%_off_for_100_patches#55%_off_for_200_patches#65%_off_for_500_patches#70%_off_for_1000_patches';
+        Test.startTest();
+        //UpdatePromoCodeTriggerHandler.updatePromoCode(new List<Opportunity>{updatedOpp}, new Map<Id, Opportunity>{ updatedOpp.Id => updatedOpp });
+        Test.stopTest();
+    }
+    
+     @isTest
+    static void testMetadataParsing() {
+        Opportunity opp = new Opportunity(
+            Name = 'Test Opportunity',
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            shopify_meta_fields__c = '[{"properties":[{"name":"_discount_name","value":"0%_off_for_25_patches#25%_off_for_50_patches#35%_off_for_100_patches#55%_off_for_200_patches#65%_off_for_500_patches#70%_off_for_1000_patches"}]}]'
+        );
+        insert opp;
+        Test.startTest();
+        List<Opportunity> oppList = [SELECT Id, Promo_Code__c, shopify_meta_fields__c FROM Opportunity WHERE Id = :opp.Id];
+        //UpdatePromoCodeTriggerHandler.updatePromoCode(oppList, );
+        Test.stopTest();
+        Opportunity resultOpp = [SELECT Id, Promo_Code__c FROM Opportunity WHERE Id = :opp.Id];
+    }
+}
