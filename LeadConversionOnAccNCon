@@ -1,1 +1,124 @@
+apex trigger:
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+trigger contactInsert on Contact (before insert, after insert) {
+    if (Trigger.isBefore) {
+        if (Trigger.isInsert) {
+            LeadConvertHandler.contactInsert(Trigger.new);
+        }
+    } else if (Trigger.isAfter) {
+        if (Trigger.isInsert) {
+            Set<String> contactShopifyIds = new Set<String>();
+            Set<String> leadShopifyIds = new Set<String>();
+            for (Contact newContact : Trigger.new) {
+                if (newContact.HIC_ShopifySync__Shopify_Id__c != null) {
+                    contactShopifyIds.add(newContact.HIC_ShopifySync__Shopify_Id__c);
+                    leadShopifyIds.add(newContact.HIC_ShopifySync__Shopify_Id__c.toString().replace('Business', '').replace('Person', '').trim());
+                }
+            }
+            LeadConvertHandler.handleLeadConversion(contactShopifyIds, leadShopifyIds);
+        }
+    }
+}
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+apex class:
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+public class LeadConvertHandler {
+    public static boolean contactUpdate = false;
+    public static void contactInsert(List<Contact> newContacts) {
+        system.debug('Contact Insert Started--->>>');
+        
+        Set<String> shopifyIds = new Set<String>();
+        
+        for (Contact newContact : newContacts) {
+            system.debug('newContact.HIC_ShopifySync__Shopify_Id__c--->>>'+newContact.HIC_ShopifySync__Shopify_Id__c);
+            if (newContact.HIC_ShopifySync__Shopify_Id__c != null) {
+                shopifyIds.add(newContact.HIC_ShopifySync__Shopify_Id__c.toString().replace('Business', '').replace('Person', '').trim());
+            }
+        }
+        
+        if (!shopifyIds.isEmpty()) {
+            Map<String, String> leadEmails = new Map<String, String>();
+            for (Lead matchingLead : [SELECT HIC_ShopifySync__Shopify_Id__c, Email FROM Lead WHERE HIC_ShopifySync__Shopify_Id__c IN :shopifyIds AND IsConverted = false]) {
+                leadEmails.put(matchingLead.HIC_ShopifySync__Shopify_Id__c, matchingLead.Email);
+            }
+            
+            for (Contact newContact : newContacts) {
+                if (newContact.HIC_ShopifySync__Shopify_Id__c != null && newContact.Email != null) {
+                    String leadEmail = leadEmails.get(newContact.HIC_ShopifySync__Shopify_Id__c.replace('Business', '').replace('Person', '').trim());
+                    if (leadEmail != null && leadEmail == newContact.Email) {
+                        newContact.Email = null;
+                    }
+                }
+            }
+        }
+        
+        system.debug('Contact Insert Ended--->>>');
+    }
+    
+    public static void handleLeadConversion(Set<String> contactShopifyIds, Set<String> leadShopifyIds) {
+        system.debug('contactShopifyIds-->'+contactShopifyIds);
+        system.debug('Lead Convert Started--->>>');
+        if (contactShopifyIds.isEmpty() || LeadConvertHandler.contactUpdate) {
+            return;
+        }
+        
+        Map<String, String> mapOfLeadShopIdVsContId = new Map<String, String>();
+        Map<String, String> mapOfLeadShopIdVsAccId = new Map<String, String>();
+        Map<String, String> mapOfContIdVsOriginalEmail = new Map<String, String>();
+        
+        for (Contact newContact : [SELECT Id, HIC_ShopifySync__Shopify_Id__c, AccountId, Email FROM Contact WHERE HIC_ShopifySync__Shopify_Id__c IN :contactShopifyIds]) {
+            system.debug('newContact-->'+newContact);
+            //mapOfLeadShopIdVsContId.put(newContact.HIC_ShopifySync__Shopify_Id__c, newContact.Id);
+            //mapOfLeadShopIdVsAccId.put(newContact.HIC_ShopifySync__Shopify_Id__c, newContact.AccountId);
+            mapOfLeadShopIdVsContId.put(newContact.HIC_ShopifySync__Shopify_Id__c.toString().replace('Business', '').replace('Person', '').trim(), newContact.Id);
+            mapOfLeadShopIdVsAccId.put(newContact.HIC_ShopifySync__Shopify_Id__c.toString().replace('Business', '').replace('Person', '').trim(), newContact.AccountId);
+            //  mapOfContIdVsOriginalEmail.put(newContact.Id, newContact.Email);
+        }
+        system.debug('mapOfLeadShopIdVsContId--->>>'+mapOfLeadShopIdVsContId);
+        system.debug('mapOfLeadShopIdVsAccId--->>>'+mapOfLeadShopIdVsAccId);
+        // system.debug('mapOfContIdVsOriginalEmail--->>>'+mapOfContIdVsOriginalEmail);
+        
+        List<Lead> matchingLeads = [SELECT Id, HIC_ShopifySync__Shopify_Id__c, Email FROM Lead WHERE HIC_ShopifySync__Shopify_Id__c IN :leadShopifyIds AND IsConverted = false];
+        system.debug('matchingLeads--->>>'+matchingLeads);
+        List<Database.LeadConvert> leadConverts = new List<Database.LeadConvert>();
+        
+        for (Lead matchingLead : matchingLeads) {
+            String leadShopifyId = matchingLead.HIC_ShopifySync__Shopify_Id__c;
+            system.debug('leadShopifyId--->>>'+leadShopifyId);
+            if (mapOfLeadShopIdVsAccId.containsKey(leadShopifyId) && mapOfLeadShopIdVsContId.containsKey(leadShopifyId)) {
+                system.debug('mapOfLeadShopIdVsAccId.get(leadShopifyId)--->>>'+mapOfLeadShopIdVsAccId.get(leadShopifyId));
+                system.debug('mapOfLeadShopIdVsContId.get(leadShopifyId)--->>>'+mapOfLeadShopIdVsContId.get(leadShopifyId));
+                system.debug('matchingLead.Id--->>>'+matchingLead.Id);
+                Database.LeadConvert leadConvert = new Database.LeadConvert();
+                leadConvert.setLeadId(matchingLead.Id);
+                leadConvert.setAccountId(mapOfLeadShopIdVsAccId.get(leadShopifyId));
+                leadConvert.setContactId(mapOfLeadShopIdVsContId.get(leadShopifyId));
+                leadConvert.setConvertedStatus('Qualified');
+                leadConvert.setDoNotCreateOpportunity(true);
+                leadConverts.add(leadConvert);
+            }
+        }
+        system.debug('leadConverts--->>>'+leadConverts);
+        if (!leadConverts.isEmpty()) {
+            List<Database.LeadConvertResult> convertResults = Database.convertLead(leadConverts, false);
+            system.debug('convertResults--->>>'+convertResults);
+            List<Contact> updatedContacts = new List<Contact>();
+            for (Database.LeadConvertResult convertResult : convertResults) {
+                if (convertResult.isSuccess()) {
+                    system.debug('convertResult.isSuccess()--->>>'+convertResult.isSuccess());
+                    String contactId = convertResult.getContactId();
+                    if(!matchingLeads?.isempty() )
+                        
+                        updatedContacts.add(new Contact(Id = contactId, Email = matchingLeads[0].email/*mapOfContIdVsOriginalEmail.get(contactId)*/));
+                }
+            }
+            system.debug('updatedContacts--->>>'+updatedContacts);
+            if (!updatedContacts.isEmpty()) {
+                update updatedContacts;
+                LeadConvertHandler.contactUpdate = true;
+            } 
+            system.debug('Lead Convert Ended--->>>');
+        }
+    }
+}
 
