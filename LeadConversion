@@ -1,0 +1,121 @@
+public class LeadConvertHandler {
+    public static boolean contactUpdate = false;
+    
+    public static void contactInsert(List<Contact> newContacts) {
+        Set<String> shopifyIds = new Set<String>();
+        for (Contact newContact : newContacts) {
+            if (newContact.HIC_ShopifySync__Shopify_Id__c != null) {
+                shopifyIds.add(String.valueOf(newContact.HIC_ShopifySync__Shopify_Id__c).replace('Business', '').replace('Person', '').trim());
+            }
+        }
+        if (!shopifyIds.isEmpty()) {
+            Map<String, String> leadEmails = new Map<String, String>();
+            for (Lead matchingLead : [SELECT HIC_ShopifySync__Shopify_Id__c, Email FROM Lead WHERE HIC_ShopifySync__Shopify_Id__c IN :shopifyIds AND IsConverted = false]) {
+                leadEmails.put(matchingLead.HIC_ShopifySync__Shopify_Id__c, matchingLead.Email);
+            }
+            for (Contact newContact : newContacts) {
+                if (newContact.HIC_ShopifySync__Shopify_Id__c != null && newContact.Email != null) {
+                    String leadEmail = leadEmails.get(newContact.HIC_ShopifySync__Shopify_Id__c.replace('Business', '').replace('Person', '').trim());
+                    if (leadEmail != null && leadEmail == newContact.Email) {
+                        newContact.Email = null;
+                    }
+                }
+            }
+        }
+    }
+    
+    public static void handleLeadConversion(Set<String> contactShopifyIds, Set<String> leadShopifyIds) {
+        if (contactShopifyIds.isEmpty() || LeadConvertHandler.contactUpdate) {
+            return;
+        }
+        Map<String, String> mapOfLeadShopIdVsContId = new Map<String, String>();
+        Map<String, String> mapOfLeadShopIdVsAccId = new Map<String, String>();
+        Map<String, String> mapOfContIdVsOriginalEmail = new Map<String, String>();
+        for (Contact newContact : [SELECT Id, HIC_ShopifySync__Shopify_Id__c, AccountId, Email FROM Contact WHERE HIC_ShopifySync__Shopify_Id__c IN :contactShopifyIds]) {
+            mapOfLeadShopIdVsContId.put(String.valueOf(newContact.HIC_ShopifySync__Shopify_Id__c).replace('Business', '').replace('Person', '').trim(), newContact.Id);
+            mapOfLeadShopIdVsAccId.put(String.valueOf(newContact.HIC_ShopifySync__Shopify_Id__c).replace('Business', '').replace('Person', '').trim(), newContact.AccountId);
+        }
+        List<Lead> matchingLeads = [SELECT Id, HIC_ShopifySync__Shopify_Id__c, Email,OwnerId,Trade_Show__c,HIC_ShopifySync__ProductInterest__c,LeadSource FROM Lead WHERE HIC_ShopifySync__Shopify_Id__c IN :leadShopifyIds AND IsConverted = false];
+        List<Database.LeadConvert> leadConverts = new List<Database.LeadConvert>();
+        for (Lead matchingLead : matchingLeads) {
+            String leadShopifyId = matchingLead.HIC_ShopifySync__Shopify_Id__c;
+            if (mapOfLeadShopIdVsAccId.containsKey(leadShopifyId) && mapOfLeadShopIdVsContId.containsKey(leadShopifyId)) {
+                Database.LeadConvert leadConvert = new Database.LeadConvert();
+                leadConvert.setLeadId(matchingLead.Id);
+                leadConvert.setAccountId(mapOfLeadShopIdVsAccId.get(leadShopifyId));
+                leadConvert.setContactId(mapOfLeadShopIdVsContId.get(leadShopifyId));
+                leadConvert.setConvertedStatus('Qualified');
+                leadConvert.setDoNotCreateOpportunity(true);
+                leadConverts.add(leadConvert);
+            }
+        }
+        /*if (!leadConverts.isEmpty()) {
+            List<Database.LeadConvertResult> convertResults = Database.convertLead(leadConverts, false);
+            List<Contact> updatedContacts = new List<Contact>();
+            for (Database.LeadConvertResult convertResult : convertResults) {
+                if (convertResult.isSuccess()) {
+                    String contactId = convertResult.getContactId();
+                    if (!matchingLeads.isEmpty()) {
+                        updatedContacts.add(new Contact(Id = contactId, Email = matchingLeads[0].Email));
+                    }
+                }
+            }
+            if (!updatedContacts.isEmpty()) {
+                update updatedContacts;
+                LeadConvertHandler.contactUpdate = true;
+                
+                Map<Id, Id> accountOwnerMap = new Map<Id, Id>();
+                for (Contact updatedContact : updatedContacts) {
+                    Id accountId = updatedContact.AccountId;
+                    if (accountId != null) {
+                        accountOwnerMap.put(updatedContact.Id, accountId);
+                    }
+                }
+                if (!accountOwnerMap.isEmpty()) {
+                    List<Lead> leadsToUpdate = [SELECT Id, OwnerId FROM Lead WHERE Id IN :accountOwnerMap.keySet()];
+                    for (Lead leadToUpdate : leadsToUpdate) {
+                        Id accountId = accountOwnerMap.get(leadToUpdate.Id);
+                        leadToUpdate.OwnerId = [SELECT OwnerId FROM Account WHERE Id = :accountId].OwnerId;
+                    }
+                    update leadsToUpdate;
+                }
+            }
+        }*/
+          if (!leadConverts.isEmpty()) {
+            List<Database.LeadConvertResult> convertResults = Database.convertLead(leadConverts, false);
+            List<Contact> updatedContacts = new List<Contact>();
+            List<Account> updatedAccounts = new List<Account>();
+
+            for (Database.LeadConvertResult convertResult : convertResults) {
+                if (convertResult.isSuccess()) {
+                    String contactId = convertResult.getContactId();
+                    String accountId = convertResult.getAccountId();
+
+                    if (!matchingLeads.isEmpty()) {
+                        updatedContacts.add(new Contact(Id = contactId, Email = matchingLeads[0].Email));
+                    }
+
+                    if (accountId != null) {
+                        Account updatedAccount = new Account(Id = accountId,
+                            OwnerId = [SELECT OwnerId FROM Lead WHERE Id = :convertResult.getLeadId()].OwnerId,
+                            Trade_Show__c = matchingLeads[0].Trade_Show__c, 
+                            Shopify_Product_Interest__c = matchingLeads[0].HIC_ShopifySync__ProductInterest__c,
+                            AccountSource=matchingLeads[0].LeadSource
+ 
+                        );
+                        updatedAccounts.add(updatedAccount);
+                    }
+                }
+            }
+
+            if (!updatedContacts.isEmpty()) {
+                update updatedContacts;
+                LeadConvertHandler.contactUpdate = true;
+            }
+
+            if (!updatedAccounts.isEmpty()) {
+                update updatedAccounts;
+            }
+        }
+    }
+}
