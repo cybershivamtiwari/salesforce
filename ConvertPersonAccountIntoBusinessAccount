@@ -1,0 +1,325 @@
+/ Trigger to handle lead conversion when new person accounts are inserted
+trigger LeadConvertFromAccountTrigger on Account (before insert, after insert) {
+    // Before trigger context
+    if (Trigger.isBefore) {
+        // Before insert context
+        if (Trigger.isInsert) {
+            // Call accountInsert method of LeadConvertFromAccount class to process new person accounts
+            LeadConvertFromAccount.accountInsert(Trigger.new);
+        }
+    }
+    // After trigger context
+    else if (Trigger.isAfter) {
+        // After insert context
+        if (Trigger.isInsert) {
+            // Map to store Shopify ID vs Lead ID mappings
+            Map<String, String> accountShopifyVSLeadIdMap = new Map<String, String>();
+            // Loop through new person accounts to populate the mapping
+            for (Account newPersonAccount : [select RecordTypeId, RecordType.name,HIC_ShopifySync__Shopify_Id__c from Account where Id IN :Trigger.new]) {
+                // Check if the record represents a Person Account
+                system.debug('newPersonAccount.RecordType.name--->>>'+newPersonAccount.RecordType.name);
+                if (newPersonAccount.RecordTypeId != null && newPersonAccount.RecordType.name == 'Person Account') {
+                    // Check if Shopify ID is not null
+                    if (newPersonAccount.HIC_ShopifySync__Shopify_Id__c != null) {
+                        // Prepare Shopify ID for mapping by removing unnecessary characters
+                        accountShopifyVSLeadIdMap.put(newPersonAccount.HIC_ShopifySync__Shopify_Id__c, String.valueOf(newPersonAccount.HIC_ShopifySync__Shopify_Id__c).replace('Business', '').replace('Person', '').trim());
+                    }
+                }
+            }
+            // If the mapping is not empty, call handleLeadConversion method of LeadConvertFromAccount class
+            if (!accountShopifyVSLeadIdMap.isEmpty()) {
+                LeadConvertFromAccount.handleLeadConversion(accountShopifyVSLeadIdMap);
+            }
+        }
+    }
+}
+5:16
+public class LeadConvertFromAccount {
+    // Static variable to track whether account update has occurred
+    public static boolean accountUpdate = false;   
+
+    // Method to handle account insertion
+    public static void accountInsert(List<Account> newPersonAccounts) {
+        // Set to store unique emails from new person accounts
+        Set<String> emails = new Set<String>();
+        // List to store leads that need to be updated
+        List<Lead> leadsToUpdate = new List<Lead>();        
+        // Loop through new person accounts to extract emails
+        system.debug('newPersonAccounts--->>>'+newPersonAccounts);
+        for (Account newPersonAccount : newPersonAccounts) {
+            // Check if the email is not null
+            if (newPersonAccount.PersonEmail != null && newPersonAccount.HIC_ShopifySync__Shopify_Id__c != null) {
+                // Add the email to the set of emails
+                emails.add(newPersonAccount.PersonEmail);
+            }
+        }       
+        // Check if there are any emails to process
+        if (!emails.isEmpty()) {
+            // Map to store Lead IDs mapped to their corresponding email
+            Map<String, String> leadShopifyIdMap = new Map<String, String>();
+            // Query leads matching the emails
+            for (Lead matchingLead : [SELECT Id, HIC_ShopifySync__Shopify_Id__c, Email FROM Lead WHERE Email IN :emails AND IsConverted = false]) {
+               system.debug('matchingLead--->>>'+matchingLead);
+                // Populate the map with lead email and lead ID
+                leadShopifyIdMap.put(matchingLead.Email, matchingLead.Id);
+            }            
+            // Loop through new person accounts again to update leads
+            for (Account newPersonAccount : newPersonAccounts) {
+                if (newPersonAccount.PersonEmail != null) {
+                    // Retrieve the lead ID for the person account's email
+                    String leadId = leadShopifyIdMap.get(newPersonAccount.PersonEmail);
+                    system.debug('leadId--->>>'+leadId);
+                    if (leadId != null) {
+                        // Modify the lead and add it to the list of leads to update
+                        leadsToUpdate.add(new Lead(Id = leadId, HIC_ShopifySync__Shopify_Id__c = (newPersonAccount.HIC_ShopifySync__Shopify_Id__c).replace('Business', '').replace('Person', '').trim()));
+                        // Reset the person account's email to null
+                        newPersonAccount.PersonEmail = null;
+                    }
+                }
+            }           
+            // Check if there are leads to update
+            if (!leadsToUpdate.isEmpty()) {
+                // Update the leads
+                update leadsToUpdate;
+            }
+        }
+    }   
+
+    // Method to handle lead conversion
+    public static void handleLeadConversion(Map<String, String> accountShopifyVSLeadIdMap) {
+        system.debug('accountShopifyVSLeadIdMap--->>>'+accountShopifyVSLeadIdMap);
+        // Check if the map is empty or if account updates have already been made
+        if (accountShopifyVSLeadIdMap.isEmpty() || LeadConvertFromAccount.accountUpdate) {
+            // If conditions are met, return without further processing
+            return;
+        }
+        // Maps to store associations between lead ID, person account ID, and original person account email
+        Map<String, String> mapOfLeadShopIdVsAccId = new Map<String, String>();
+        Map<String, String> mapOfLeadShopIdVsOriginalEmail = new Map<String, String>();        
+        // Query person accounts based on Shopify ID
+        for (Account newPersonAccount : [SELECT Id, PersonEmail, HIC_ShopifySync__Shopify_Id__c FROM Account WHERE HIC_ShopifySync__Shopify_Id__c IN :accountShopifyVSLeadIdMap.keySet()]) {
+           system.debug('newPersonAccount--->>>'+newPersonAccount);
+            // Check if the map contains the key
+            if (accountShopifyVSLeadIdMap.containsKey(newPersonAccount.HIC_ShopifySync__Shopify_Id__c)) {
+                // Populate maps with relevant information
+                mapOfLeadShopIdVsAccId.put(accountShopifyVSLeadIdMap.get(newPersonAccount.HIC_ShopifySync__Shopify_Id__c), newPersonAccount.Id);
+                mapOfLeadShopIdVsOriginalEmail.put(accountShopifyVSLeadIdMap.get(newPersonAccount.HIC_ShopifySync__Shopify_Id__c), newPersonAccount.PersonEmail);
+            }
+        }        
+        // Query leads based on Shopify ID and conversion status
+        List<Lead> matchingLeads = [SELECT Id, HIC_ShopifySync__Shopify_Id__c, Email FROM Lead WHERE HIC_ShopifySync__Shopify_Id__c IN :accountShopifyVSLeadIdMap.values() AND IsConverted = false];
+        system.debug('matchingLeads--->>>'+matchingLeads);
+        // List to store LeadConvert objects
+        List<Database.LeadConvert> leadConverts = new List<Database.LeadConvert>();       
+        // Iterate through matching leads
+        for (Lead matchingLead : matchingLeads) {
+            String leadShopifyId = matchingLead.HIC_ShopifySync__Shopify_Id__c;
+            // Check if the lead and associated person account IDs exist
+            if (mapOfLeadShopIdVsAccId.containsKey(leadShopifyId)) {
+                // Create a LeadConvert object and add it to the list
+                Database.LeadConvert leadConvert = new Database.LeadConvert();
+                leadConvert.setLeadId(matchingLead.Id);
+                leadConvert.setAccountId(mapOfLeadShopIdVsAccId.get(leadShopifyId));
+                leadConvert.setConvertedStatus('Qualified');
+                leadConvert.setDoNotCreateOpportunity(true);
+                leadConverts.add(leadConvert);
+            }
+        }
+        // Check if there are LeadConvert objects to process
+        if (!leadConverts.isEmpty()) {
+            // Convert the leads and store the results
+            List<Database.LeadConvertResult> convertResults = Database.convertLead(leadConverts, false);
+             system.debug('convertResults--->>>'+convertResults);
+            // Lists to store updated person accounts
+            List<Account> updatedPersonAccounts = new List<Account>();            
+            // Iterate through conversion results
+            for (Database.LeadConvertResult convertResult : convertResults) {
+                // Check if the conversion was successful
+                if (convertResult.isSuccess()) {
+                    // Retrieve person account ID from conversion result
+                    String personAccountId = convertResult.getAccountId();                  
+                    // Check if matching leads exist
+                    if (!matchingLeads.isEmpty()) {
+                        // Add the original email to the updated person account
+                        updatedPersonAccounts.add(new Account(Id = personAccountId, PersonEmail = mapOfLeadShopIdVsOriginalEmail.get(matchingLeads[0].HIC_ShopifySync__Shopify_Id__c)));
+                    }
+                }
+            }            
+            // Check if there are updated person accounts to process     
+            if (!updatedPersonAccounts.isEmpty()) {
+                // Update the person accounts
+                 system.debug('updatedPersonAccounts size--->>>'+updatedPersonAccounts.size());
+                update updatedPersonAccounts;
+                // Set account update flag to true
+                LeadConvertFromAccount.accountUpdate = true;
+            }
+        }
+    }
+}
+5:17
+// Trigger to handle lead conversion when new contacts are inserted
+trigger LeadConversionTrigger on Contact (before insert, after insert) {
+    // Before trigger context
+    if (Trigger.isBefore) {
+        // Before insert context
+        if (Trigger.isInsert) {
+            // Call contactInsert method of LeadConvertHandler class to process new contacts
+            LeadConvertHandler.contactInsert(Trigger.new);
+        }
+    }
+    // After trigger context
+    else if (Trigger.isAfter) {
+        // After insert context
+        if (Trigger.isInsert) {
+            // Map to store Shopify ID vs Lead ID mappings
+            Map<String, String> contactShopifyVSLeadIdMap = new Map<String, String>();
+            // Loop through new contacts to populate the mapping
+            for (Contact newContact : Trigger.new) {
+                // Check if Shopify ID is not null
+                if (newContact.HIC_ShopifySync__Shopify_Id__c != null) {
+                    // Prepare Shopify ID for mapping by removing unnecessary characters
+                    contactShopifyVSLeadIdMap.put(newContact.HIC_ShopifySync__Shopify_Id__c, String.valueOf(newContact.HIC_ShopifySync__Shopify_Id__c).replace('Business', '').replace('Person', '').trim());
+                }
+            }
+            // If the mapping is not empty, call handleLeadConversion method of LeadConvertHandler class
+            if (!contactShopifyVSLeadIdMap?.isEmpty()) {
+                LeadConvertHandler.handleLeadConversion(contactShopifyVSLeadIdMap);
+            }
+        }
+    }
+}
+5:17
+public class LeadConvertHandler {
+    // Static variable to track whether contact update has occurred
+    public static boolean contactUpdate = false;   
+    // Method to handle contact insertion
+    public static void contactInsert(List<Contact> newContacts) {
+        // Set to store unique emails from new contacts
+        Set<String> emails = new Set<String>();
+        // List to store leads that need to be updated
+        List<Lead> leadsToUpdate = new List<Lead>();        
+        // Loop through new contacts to extract emails
+        for (Contact newContact : newContacts) {
+            // Check if the email is not null
+            if (newContact.Email != null && newContact.HIC_ShopifySync__Shopify_Id__c !=null) {
+                // Add the email to the set of emails
+                emails.add(newContact.Email);
+            }
+        }       
+        // Check if there are any emails to process
+        if (!emails.isEmpty()) {
+            // Map to store Lead IDs mapped to their corresponding email
+            Map<String, String> leadShopifyIdMap = new Map<String, String>();
+            // Query leads matching the emails
+            for (Lead matchingLead : [SELECT Id, HIC_ShopifySync__Shopify_Id__c, Email FROM Lead WHERE Email IN :emails AND IsConverted = false]) {
+                // Populate the map with lead email and lead ID
+                leadShopifyIdMap.put(matchingLead.Email, matchingLead.Id);
+            }            
+            // Loop through new contacts again to update leads
+            for (Contact newContact : newContacts) {
+                if (newContact.Email != null) {
+                    // Retrieve the lead ID for the contact's email
+                    String leadId = leadShopifyIdMap.get(newContact.Email);
+                    if (leadId != null) {
+                        // Modify the lead and add it to the list of leads to update
+                        leadsToUpdate.add(new Lead(Id = leadId, HIC_ShopifySync__Shopify_Id__c =(newContact.HIC_ShopifySync__Shopify_Id__c).replace('Business', '').replace('Person', '').trim()));
+                        // Reset the contact's email to null
+                        newContact.Email = null;
+                    }
+                }
+            }           
+            // Check if there are leads to update
+            if (!leadsToUpdate.isEmpty()) {
+                // Update the leads
+                update leadsToUpdate;
+            }
+        }
+    }   
+    // Method to handle lead conversion
+    public static void handleLeadConversion(Map<String, String> contactShopifyVSLeadIdMap) {
+        // Check if the map is empty or if contact updates have already been made
+        if (contactShopifyVSLeadIdMap.isEmpty() || LeadConvertHandler.contactUpdate) {
+            // If conditions are met, return without further processing
+            return;
+        }
+        // Maps to store associations between lead ID, contact ID, account ID, and original contact email
+        Map<String, String> mapOfLeadShopIdVsContId = new Map<String, String>();
+        Map<String, String> mapOfLeadShopIdVsAccId = new Map<String, String>();
+        Map<String, String> mapOfContIdVsOriginalEmail = new Map<String, String>();        
+        // Query contacts based on Shopify ID
+        for (Contact newContact : [SELECT Id, HIC_ShopifySync__Shopify_Id__c, AccountId, Email FROM Contact WHERE HIC_ShopifySync__Shopify_Id__c IN :contactShopifyVSLeadIdMap.keySet()]) {
+            // Check if the map contains the key and its value is not null or empty
+            if (contactShopifyVSLeadIdMap.containsKey(newContact.HIC_ShopifySync__Shopify_Id__c) && 
+                !String.isBlank(contactShopifyVSLeadIdMap.get(newContact.HIC_ShopifySync__Shopify_Id__c))) {                    
+                    // Populate maps with relevant information
+                    mapOfLeadShopIdVsContId.put(contactShopifyVSLeadIdMap.get(newContact.HIC_ShopifySync__Shopify_Id__c), newContact.Id);
+                    mapOfLeadShopIdVsAccId.put(contactShopifyVSLeadIdMap.get(newContact.HIC_ShopifySync__Shopify_Id__c), newContact.AccountId);
+                }
+        }        
+        // Query leads based on Shopify ID and conversion status
+        List<Lead> matchingLeads = [SELECT Id, HIC_ShopifySync__Shopify_Id__c, Email,OwnerId,Trade_Show__c,HIC_ShopifySync__ProductInterest__c,LeadSource FROM Lead WHERE HIC_ShopifySync__Shopify_Id__c IN :contactShopifyVSLeadIdMap.values() AND IsConverted = false];
+        // List to store LeadConvert objects
+        List<Database.LeadConvert> leadConverts = new List<Database.LeadConvert>();       
+        // Iterate through matching leads
+        for (Lead matchingLead : matchingLeads) {
+            String leadShopifyId = matchingLead.HIC_ShopifySync__Shopify_Id__c;
+            // Check if the lead and associated contact and account IDs exist
+            if (mapOfLeadShopIdVsAccId.containsKey(leadShopifyId) && mapOfLeadShopIdVsContId.containsKey(leadShopifyId)) {
+                // Create a LeadConvert object and add it to the list
+                Database.LeadConvert leadConvert = new Database.LeadConvert();
+                leadConvert.setLeadId(matchingLead.Id);
+                leadConvert.setAccountId(mapOfLeadShopIdVsAccId.get(leadShopifyId));
+                leadConvert.setContactId(mapOfLeadShopIdVsContId.get(leadShopifyId));
+                leadConvert.setConvertedStatus('Qualified');
+                leadConvert.setDoNotCreateOpportunity(true);
+                leadConverts.add(leadConvert);
+            }
+        }
+        // Check if there are LeadConvert objects to process
+        if (!leadConverts.isEmpty()) {
+            // Convert the leads and store the results
+            List<Database.LeadConvertResult> convertResults = Database.convertLead(leadConverts, false);
+            // Lists to store updated contacts and accounts
+            List<Contact> updatedContacts = new List<Contact>();
+            List<Account> updatedAccounts = new List<Account>();            
+            // Iterate through conversion results
+            for (Database.LeadConvertResult convertResult : convertResults) {
+                // Check if the conversion was successful
+                if (convertResult.isSuccess()) {
+                    // Retrieve contact and account IDs from conversion result
+                    String contactId = convertResult.getContactId();
+                    String accountId = convertResult.getAccountId();                    
+                    // Check if matching leads exist
+                    if (!matchingLeads.isEmpty()) {
+                        // Add the original email to the updated contact
+                        updatedContacts.add(new Contact(Id = contactId, Email = matchingLeads[0].Email));
+                    }                    
+                    // Check if an account ID exists
+                    if (accountId != null) {
+                        // Create an updated account with relevant lead information
+                        Account updatedAccount = new Account(Id = accountId,
+                                                             OwnerId = [SELECT OwnerId FROM Lead WHERE Id = :convertResult.getLeadId()].OwnerId,
+                                                             Trade_Show__c = matchingLeads[0].Trade_Show__c, 
+                                                             Shopify_Product_Interest__c = matchingLeads[0].HIC_ShopifySync__ProductInterest__c,
+                                                             AccountSource=matchingLeads[0].LeadSource
+                                                            );
+                        
+                        updatedAccounts.add(updatedAccount);
+                    }
+                }
+            }            
+            // Check if there are updated contacts to process     
+            if (!updatedContacts.isEmpty()) {
+                // Update the contacts
+                update updatedContacts;
+                // Set contact update flag to true
+                LeadConvertHandler.contactUpdate = true;
+            }
+            if (!updatedAccounts.isEmpty()) {
+                update updatedAccounts;
+            }
+        }
+    }
+}
+    
+}
