@@ -1,0 +1,45 @@
+ // Fetch configurations for all stores
+        List<HIC_ShopifySync__HIC_Configuration__c> configs = [SELECT Id, HIC_ShopifySync__Store__c, HIC_ShopifySync__Private_Key_Password__c, HIC_ShopifySync__Salesforce_Site_URL__c, HIC_ShopifySync__Shopify_URL__c FROM HIC_ShopifySync__HIC_Configuration__c WHERE HIC_ShopifySync__Store__c != 'Default'];
+        
+        for (HIC_ShopifySync__HIC_Configuration__c config : configs) {
+            String PASSWORD = config.HIC_ShopifySync__Private_Key_Password__c;
+            String STORE = config.HIC_ShopifySync__Store__c;
+            String ShopifyUrl = config.HIC_ShopifySync__Shopify_URL__c;
+            String SalesforceUrl = config.HIC_ShopifySync__Salesforce_Site_URL__c;
+
+            // Fetch webhooks for each store
+            List<HIC_ShopifySync__HIC_Webhook__c> webhookList = [SELECT Id, HIC_ShopifySync__DML_Type__c, HIC_ShopifySync__SF_URL_Mapping__c, HIC_ShopifySync__Shopify_Object__c, HIC_ShopifySync__Store__c, HIC_ShopifySync__Topic__c, HIC_ShopifySync__Webhook_Id__c FROM HIC_ShopifySync__HIC_Webhook__c WHERE HIC_ShopifySync__Topic__c = 'customers/create' OR HIC_ShopifySync__Topic__c = 'customers/update' AND HIC_ShopifySync__Store__c = :STORE];
+            
+            for (HIC_ShopifySync__HIC_Webhook__c webhook : webhookList) {
+                String requestBody = '{"webhook":{"id":"' + webhook.HIC_ShopifySync__Webhook_Id__c + '","address":"'+SalesforceUrl+'/services/apexrest/HIC_ShopifySync/'+webhook.HIC_ShopifySync__SF_URL_Mapping__c+'?objectname=Customer&DMLType=' + webhook.HIC_ShopifySync__DML_Type__c + '&store=' +STORE+ '","topic":"' + webhook.HIC_ShopifySync__Topic__c + '","format":"json","fields":[],"metafield_namespaces":["custom","facts"],"private_metafield_namespaces":[]}}';
+
+                String endPointValue = ShopifyUrl + '/admin/webhooks/' + webhook.HIC_ShopifySync__Webhook_Id__c + '.json';
+                String jsonResponse;
+                String error;
+                Http http = new Http();
+                HttpRequest request = new HttpRequest();
+                request.setEndpoint(endPointValue);
+                request.setMethod('PUT');
+
+                request.setHeader('X-Shopify-Access-Token', PASSWORD);
+                request.setHeader('Content-Type', 'application/json');
+                request.setHeader('Accept', 'application/json');
+                request.setBody(requestBody);
+                HttpResponse response = new HttpResponse();
+                
+                try {
+                    response = http.send(request);
+                    if (response.getStatusCode() == 400) {
+                        System.debug('Response Status: Bad Request (400)');
+                        System.debug('Response Body: ' + response.getBody());
+                        error = response.getBody();
+                    } else if (response.getStatusCode() == 200) {
+                        String resBody = response.getBody();
+                        jsonResponse = response.getBody();
+                        System.debug('Response: ' + jsonResponse);
+                    }
+                } catch (Exception e) {
+                    System.debug('Exception ' + e.getMessage() + ' at line ' + e.getLineNumber());
+                }
+            }
+        }
