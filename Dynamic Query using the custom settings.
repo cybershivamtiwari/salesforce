@@ -1,0 +1,9 @@
+        Set<String> accountFields = new Set<String>();
+        List<CustomSettings> CustomSettingsList = [SELECT Salesforce_Field__c FROM Custom settings Object WHERE Active__c = true];
+        for (custom settings Object mapping : CustomSettingsList) {
+            accountFields.add(mapping.Salesforce_Field__c);
+        }
+        String fieldsQuery = String.join(new List<String>(accountFields), ',');
+        String query = 'SELECT ' + 'id,' + fieldsQuery + ' FROM Account  WHERE Id = :accountId LIMIT 1';
+            System.debug('query+++++++++' + query);
+        Account acct = Database.query(query);
