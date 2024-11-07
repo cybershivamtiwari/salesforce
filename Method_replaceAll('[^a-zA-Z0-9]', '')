@@ -1,0 +1,4 @@
+String normalizeName(String name) {
+            if (name == null) return '';
+            return name.replaceAll('\\[.*?\\]', '').replaceAll('[^a-zA-Z0-9]', '').toLowerCase();
+        }
