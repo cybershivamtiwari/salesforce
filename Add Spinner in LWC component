@@ -1,0 +1,151 @@
+Add Spinner to Headerless Detail Action LWC Component
+
+
+
+
+
+
+What is Headless Quick Actions in Lightning Web Components?
+A headless quick action executes custom code in a Lightning web component. Unlike a screen action, a headless action doesn’t open a modal window.
+
+
+
+
+Prerequisite to Create a Headerless Quick Action in LWC:
+1.Salesforce Developer Tools: Set up Salesforce DX and Visual Studio Code for development.
+2.Basic LWC Knowledge: Familiarity with creating and deploying Lightning Web Components.
+3.Access to Salesforce Org: You need access to a Salesforce org where you can create Quick Actions and deploy LWC components.
+4.Object for the Quick Action: Determine the object (e.g., Account, Opportunity) where you will be placing the Quick Action.
+
+
+
+
+
+
+
+
+Steps to Create a Headerless Quick Action.
+
+Step 1: Create the LWC Component
+
+1.Create LWC component:
+sfdx force:lightning:component:create --type lwc --componentname HeaderlessQuickAction --outputdir force-app/main/default/lwc
+2.Define the HTML structure (headerlessQuickAction.html):
+
+<template>
+  <template if:true={isExecuting}>
+      <div style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.5); z-index: 1000; display: flex; flex-direction: column; justify-content: center; align-items: center; transform: translateY(-20%);">
+          <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+              <span style="color: #ffffff; font-size: 18px; font-weight: bold; margin-bottom: 50px;">We are working on it. Please wait for a while!</span>
+              <div style="position: relative; display: inline-block;">
+                  <lightning-spinner alternative-text="Processing..." size="large" variant="brand"></lightning-spinner>
+              </div>
+          </div>
+      </div>
+  </template>
+</template>
+
+
+
+
+
+
+
+
+
+
+3.Handle the logic in the JavaScript controller (headerlessQuickAction.js):
+
+
+import { LightningElement, track, api, wire  } from 'lwc';
+import { CloseActionScreenEvent } from 'lightning/actions';
+import { ShowToastEvent } from 'lightning/platformShowToastEvent';
+import { updateRecord } from 'lightning/uiRecordApi';
+
+
+export default class headerlessQuickAction extends LightningElement {
+   
+    @api recordId;
+ 
+    @track isExecuting = false;
+   
+    @api async invoke() {
+        if (this.isExecuting) {
+            return;
+        }
+        // Checking if the user have permission and Call the async Method
+        if (this.userHasPermission) {
+            this.isExecuting = true;
+            await this.handleClick();
+            this.isExecuting = false;
+        } else {
+            this.showToast('Error', 'You do not have the permission to use this button.', 'error');
+            this.closeAction();
+        }
+    }  
+    async handleClick() {
+        //logic here
+    }
+    closeAction() {
+        this.dispatchEvent(new CloseActionScreenEvent());
+    }
+    showToast(title, message, variant) {
+        const event = new ShowToastEvent({
+            title,
+            message,
+            variant,
+        });
+        this.dispatchEvent(event);
+    }
+   
+}
+
+
+
+Step 2: Create a Custom Quick Action
+Navigate to Object Manager and select the object you want to create the Quick Action for (e.g., Account, Opportunity).
+Go to Buttons, Links, and Actions, and click New Action.
+Select the following settings:
+Action Type: Lightning Component
+Lightning Component: Choose your LWC (e.g., c:HeaderlessQuickAction)
+Save the action and then add it to the page layout if needed.
+
+
+
+Step 3: Override the Standard Header by defining the below XML.
+
+In the LWC Quick Action, to hide the standard Salesforce modal header, you'll need to configure the metadata file by defining <targets> in headerlessQuickAction.js-meta.xml.
+
+
+
+
+
+<?xml version="1.0"?>
+<LightningComponentBundle xmlns="http://soap.sforce.com/2006/04/metadata">
+<apiVersion>57.0</apiVersion>
+  <isExposed>true</isExposed>
+  <targets>
+    <target>lightning__RecordAction</target>
+  </targets>
+  <targetConfigs>
+    <targetConfig targets="lightning__RecordAction">
+      <actionType>Action</actionType>
+    </targetConfig>
+  </targetConfigs>
+</LightningComponentBundle>
+
+
+
+
+
+
+Step 4: Deploy the LWC component
+sfdx force:source:deploy -p force-app/main/default/lwc/headerlessQuickAction
+
+
+Conclusion:
+A headerless Quick Action in LWC simplifies the UI by removing the default modal header, providing a clean and customized user experience in Salesforce.
+
+
+Picture:
+
