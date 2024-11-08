@@ -1,0 +1,84 @@
+<template if:true={showSpinner}>
+        <div class="spinner-overlay">
+            <div class="spinner-content">
+                <span class="spinner-text">We are working on it. Please wait for a while!</span>
+                <div class="custom-spinner-wrapper">
+                    <lightning-spinner alternative-text="Processing..." size="large" variant="base" class="custom-spinner"></lightning-spinner>
+                </div>
+            </div>
+        </div>
+    </template>
+
+
+@track showSpinner = true;
+ this.showSpinner = true;
+ this.showSpinner = false;
+
+
+
+.spinner-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7); 
+    z-index: 1000; 
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transform: translateY(-20%);
+}
+
+.spinner-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.spinner-text {
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    font-family: 'Helvetica', sans-serif;
+    animation: fadeIn 2s ease-in-out infinite, pulse 1s ease-in-out infinite;
+    text-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000, 0 0 30px #ff7f50; 
+}
+
+.custom-spinner-wrapper {
+    display: inline-block;
+    position: relative;
+}
+
+.custom-spinner {
+    border-top: 8px solid #ff7f50; 
+    border-right: 8px solid #48c9b0; 
+    border-bottom: 8px solid #f39c12; 
+    border-left: 8px solid #3498db; 
+    border-radius: 50%;
+    width: 80px;
+    height: 80px; 
+    box-shadow: 0 0 20px #ff7f50, 0 0 40px #ff7f50, 0 0 60px #ff7f50; 
+    animation: spin 1.5s linear infinite, glow 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0% { opacity: 0.8; }
+    50% { opacity: 1; }
+    100% { opacity: 0.8; }
+}
+
+@keyframes glow {
+    0% { box-shadow: 0 0 20px #ff7f50, 0 0 40px #ff7f50, 0 0 60px #ff7f50; }
+    50% { box-shadow: 0 0 30px #ff7f50, 0 0 60px #ff7f50, 0 0 90px #ff7f50; }
+    100% { box-shadow: 0 0 20px #ff7f50, 0 0 40px #ff7f50, 0 0 60px #ff7f50; }
+}
