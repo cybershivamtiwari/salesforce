@@ -1,0 +1,29 @@
+ private static String getApiFieldName(String sObjectName, String fieldLabel) {
+        if (String.isEmpty(sObjectName) || String.isEmpty(fieldLabel)) {
+            return null;
+        }
+        try {
+            Schema.SObjectType sObjectType = Schema.getGlobalDescribe().get(sObjectName);
+            Schema.DescribeSObjectResult describeResult = sObjectType.getDescribe();
+            Map<String, Schema.SObjectField> fieldsMap = describeResult.fields.getMap();
+            for (String apiFieldName : fieldsMap.keySet()) {
+                Schema.SObjectField field = fieldsMap.get(apiFieldName);
+                String label = field.getDescribe().getLabel();
+                if (label != null && label.equals(fieldLabel)) {
+                    return capitalizeApiName(apiFieldName);
+                }
+            }
+        } catch (Exception e) {
+            System.debug('Error getting API name: ' + e.getMessage());
+        }
+        return null; 
+    }
+    private static String capitalizeApiName(String apiFieldName) {
+        String result = ''; 
+        String[] parts = apiFieldName.split('__');
+        result += parts[0].substring(0, 1).toUpperCase() + parts[0].substring(1);
+        if (parts.size() > 1) { 
+            result += '__' + parts[1].substring(0, 1).toUpperCase() + parts[1].substring(1);
+        }
+        return result; 
+    }
