@@ -1,0 +1,80 @@
+expandAll() {
+    const sectionNames = [];
+
+    // Collect all section names recursively
+    const collectSectionNames = (groupedSections) => {
+        groupedSections.forEach(section => {
+            sectionNames.push(section.sectionName);
+            if (section.hasSubSections) {
+                collectSectionNames(section.subSections); // Recursively collect subsection names
+            }
+        });
+    };
+
+    collectSectionNames(this.groupedFeatures);
+
+    // Set the active section names for all accordions in the template
+    const updateActiveSections = (element) => {
+        const accordions = element.querySelectorAll('lightning-accordion');
+        accordions.forEach(accordion => {
+            accordion.activeSectionName = [...sectionNames];
+        });
+    };
+
+    // Use a timeout to ensure DOM is updated before applying the active sections
+    setTimeout(() => {
+        updateActiveSections(this.template);
+    }, 0);
+}
+
+
+collapseAll() {
+    const updateActiveSections = (element) => {
+        const accordions = element.querySelectorAll('lightning-accordion');
+        accordions.forEach(accordion => {
+            accordion.activeSectionName = []; // Collapse all sections
+        });
+    };
+
+    // Use a timeout to ensure DOM is updated before applying the collapsed state
+    setTimeout(() => {
+        updateActiveSections(this.template);
+    }, 0);
+}
+
+
+
+
+<lightning-button label="Expand All" onclick={expandAll}></lightning-button>
+<lightning-button label="Collapse All" onclick={collapseAll}></lightning-button>
+
+<template if:true={groupedFeatures}>
+    <template for:each={groupedFeatures} for:item="section">
+        <lightning-accordion allow-multiple-sections-open onsectiontoggle={handleSectionToggle} active-section-name={section.activeSections} key={section.sectionName}>
+            <lightning-accordion-section label={section.sectionName} key={section.sectionName}>
+                <template if:true={section.hasSubSections}>
+                    <template for:each={section.subSections} for:item="subSection">
+                        <lightning-accordion allow-multiple-sections-open active-section-name={subSection.activeSections} key={subSection.subSectionName}>
+                            <lightning-accordion-section label={subSection.subSectionName} key={subSection.subSectionName}>
+                                <template for:each={subSection.features} for:item="feature">
+                                    <div class="slds-box slds-box_small feature-box" key={feature.Id}>
+                                        <!-- Feature content -->
+                                    </div>
+                                </template>
+                            </lightning-accordion-section>
+                        </lightning-accordion>
+                    </template>
+                </template>
+            </lightning-accordion-section>
+        </lightning-accordion>
+    </template>
+</template>
+
+
+    @track groupedFeatures = [];
+    @track activeSectionNames = [];
+
+
+  connectedCallback() {
+        this.activeSectionNames = this.groupedFeatures.map(section => section.sectionName);
+    }
