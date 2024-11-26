@@ -1,0 +1,10 @@
+CodeAnalyzerGeneralSecurity
+sfdx scanner run --format=csv --outfile=CodeAnalyzerGeneralSecurity.csv --target="./" --category="Security"
+CodeAnalyzerDFASecurity
+sfdx scanner:run:dfa --format=csv --outfile=CodeAnalyzerDFASecurity.csv --target="./" --projectdir="./" --category="Security"
+CodeAnalyzerDFAPerform
+sfdx scanner:run:dfa --format=csv --outfile=CodeAnalyzerDFAPerform.csv --target="./" --projectdir="./" --category="Performance"
+CodeAnalyzerGeneralPerform
+sfdx scanner run --format=csv --outfile=CodeAnalyzerGeneralPerform.csv --target="./" --category="Performance"
+pathToFile
+sfdx scanner:run --target "**/default/**" --format "csv" --outfile "pathToFile.csv"
