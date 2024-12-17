@@ -1,0 +1,41 @@
+String endpoint = 'https://www.ftp-api.com/ftp/checkconnection';
+
+    // Define FTP credentials
+    String username = '';
+    String password = '';
+    String port = '21';
+    String ftpHost = 'ftpupload.net';
+    String ftpType = 'FTP';
+
+    // Create HTTP request
+    HttpRequest req = new HttpRequest();
+    req.setEndpoint(endpoint);
+    req.setMethod('GET'); // Use POST as per standard FTP API usage
+    req.setHeader('Content-Type', 'application/json');
+    req.setHeader('username', username);
+    req.setHeader('password', password);
+    req.setHeader('port', port);
+    req.setHeader('ftp-host', ftpHost);
+    req.setHeader('ftp-type', ftpType);
+
+    // Set timeout to avoid long wait
+    req.setTimeout(30000);
+
+    try {
+        // Create HTTP object and send the request
+        Http http = new Http();
+        HttpResponse res = http.send(req);
+
+        // Handle response
+        if (res.getStatusCode() == 200) {
+            System.debug('Connection successful. Response: ' + res.getBody());
+        } else {
+            System.debug('Connection failed. Status code: ' + res.getStatusCode() + ', Response: ' + res.getBody());
+        }
+    } catch (Exception e) {
+        System.debug('Exception occurred: ' + e.getMessage());
+    }
+
+
+
+url: https://www.ftp-api.com/#authentication
