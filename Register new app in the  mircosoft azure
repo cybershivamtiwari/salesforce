@@ -1,0 +1,34 @@
+Login to Microsoft Azure account.
+
+Click on Azure Active Directory.
+Create an app in the Azure Portal for the Tenant.
+
+Click on App registrations on the left panel.
+
+Click on New registration.
+
+Enter the App name and select the options as shown in the image.
+Click on Register.
+
+Note down the Client Id and Tenant Id.
+Click on Authentication from the left panel.
+
+Click on Add a platform. Select Web.
+Enter the Redirect URI as your Salesforce org domain.
+Ex: https://<domain-name>.my.salesforce.com
+
+Ensure the checkboxes shown in the image are checked.
+Click on Certificates & secrets.
+
+Click New client secret. Once generated, note down the Client Secret value.
+Request for API permissions (usually granted by SharePoint admin)
+
+Click Add a permission. Select Microsoft graph. Select the permissions as shown above for Delegated and Application permissions.
+Note: Delegated permissions are for user based API requests and Application permissions are temporary access token based API requests. For Application permissions, SharePoint Admin should grant explicit access.
+Create a SharePoint Site where the documents need to be stored and note down the SharePoint Site Id by hitting this URL in the browser: https://<tenant>.sharepoint.com/sites/<site-url>/_api/site/id
+Please share the information noted below with me.
+Client Id 
+Tenant Id
+Client Secret.
+
+
