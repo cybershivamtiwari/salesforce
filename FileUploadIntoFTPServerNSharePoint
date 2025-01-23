@@ -1,0 +1,144 @@
+/**
+ * @description       : 
+ * @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+ * @group             : 
+ * @last modified on  : 01-23-2025
+ * @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+**/
+public class uploadCsvOnDriveAndServer {
+    public static void uploadCsvOnDriveAndServerMethod() {
+        try {
+            Blob csvFile = generateCSVReport(); 
+            String fileName = 'TNI' + Date.today().year() + '-' + Date.today().month() + '-' + Date.today().day() + '.csv';
+            System.debug('Generated File Name: ' + fileName);
+            if (csvFile != null && csvFile.size() > 0) {
+                 // uploadFileToFTPAsync(csvFile, fileName);
+                  uploadCsvToSharePoint(csvFile, fileName);
+            } else {
+                throw new AuraHandledException('Generated file or file name is invalid. Upload skipped.');
+            }
+        } catch (Exception e) {
+            System.debug('Exception in uploadCsvOnDriveAndServerMethod: ' + e.getMessage());
+            System.debug('Exception Stack Trace: ' + e.getStackTraceString());
+            sendEmailNotification(false, e.getMessage());
+        }
+    }
+    
+    public static Blob generateCSVReport() {
+        
+        return Blob.valueOf(csvContent);
+    }
+    
+    private static String formatCsvField(String field) {
+        if (field == null) return '""';
+        if (field.contains('"') || field.contains(',') || field.contains('\n')) {
+            return '"' + field.replace('"', '""') + '"';
+        }
+        return field;
+    }
+    
+    public static void uploadFileToFTPAsync(Blob csvBlob, String fileName) {
+        try {
+            String endpoint = '';
+            String username = '';
+            String password = '';
+            String port = '21';
+            String ftpHost = '';
+            String ftpType = 'FTP';
+            String path = '';
+            
+            String encodedFile = EncodingUtil.base64Encode(csvBlob);
+            System.debug('Encoded file size: ' + encodedFile.length() + ' bytes');
+            
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint(endpoint);
+            req.setMethod('POST');
+            req.setHeader('Content-Type', 'application/json');
+            req.setHeader('username', username);
+            req.setHeader('password', password);
+            req.setHeader('port', port);
+            req.setHeader('ftp-host', ftpHost);
+            req.setHeader('ftp-type', ftpType);
+            
+            
+            List<Map<String, Object>> payload = new List<Map<String, Object>>{ new Map<String, Object>{  'path' => path,  'fileName' => fileName,  'body' => encodedFile } };
+           
+            req.setBody(System.JSON.serialize(payload));
+            req.setTimeout(120000); 
+            
+            Http http = new Http();
+            HttpResponse res = http.send(req);
+            
+            System.debug('FTP Upload Response Status: ' + res.getStatusCode());
+            System.debug('FTP Upload Response Body: ' + res.getBody());
+            if (res.getStatusCode() == 200 || res.getStatusCode() == 201) {
+                sendEmailNotification(true, null);
+            } else {
+                System.debug('FTP upload failed. Status code: ' + res.getStatusCode() + ', Response: ' + res.getBody());
+                throw new AuraHandledException('FTP upload failed. Status code: ' + res.getStatusCode() + ', Response: ' + res.getBody());
+
+            }
+        } catch (Exception e) {
+            System.debug('Exception occurred during FTP upload: ' + e.getMessage());
+            System.debug('Exception Stack Trace: ' + e.getStackTraceString());
+           sendEmailNotification(false, e.getMessage());
+        }
+    }
+    
+    public static void sendEmailNotification(Boolean uploadSuccess,String errorMessage) {
+        String subject = 'TNI Billing Report Upload - ' + Date.today().format();
+        String body = uploadSuccess ? 'Hello, The billing report has been uploaded to the FTP server for Tidewater. Please reach out to Jason Holmes if you have any questions' : 'Hello, the billing report upload to the FTP server failed. Error: ' + errorMessage + '\nPlease investigate the issue.';
+        Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+        email.setToAddresses(new String[] {''});
+        email.setCcAddresses(new String[] {''});
+        email.setSubject(subject);
+        email.setPlainTextBody(body);
+        Messaging.sendEmail(new Messaging.SingleEmailMessage[]{email});
+        System.debug('Email sent to: ' + email.getToAddresses());
+    }
+   
+    public static void uploadCsvToSharePoint(Blob csvBlob, String fileName) {
+        try {
+            if (!fileName.toLowerCase().endsWith('.csv')) {
+                fileName += '.csv';
+            }
+             fileName = fileName.replace(' ', '_'); 
+             fileName = EncodingUtil.urlEncode(fileName, 'UTF-8'); 
+
+             String uploadUrl = '/' + fileName + ':/content';
+
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint('callout:sharePointNamedCredential' + uploadUrl);
+            req.setMethod('PUT');
+
+            req.setHeader('Accept', 'application/json');
+            req.setHeader('Content-Type', 'text/csv');
+            
+            req.setBodyAsBlob(csvBlob); 
+    
+            System.debug('Request Endpoint: ' + req.getEndpoint());
+            System.debug('File Name: ' + fileName);
+            System.debug('Blob Size: ' + csvBlob.size());
+    
+            Http http = new Http();
+            HttpResponse res = http.send(req);
+    
+            System.debug('Status Code: ' + res.getStatusCode());
+            System.debug('Response Body: ' + res.getBody());
+
+            if (res.getStatusCode() == 200 || res.getStatusCode() == 201) {
+                System.debug('File uploaded successfully to SharePoint: ' + fileName);
+            } else {
+                System.debug('Error uploading file to SharePoint.');
+                System.debug('Status Code: ' + res.getStatusCode());
+                System.debug('Response Body: ' + res.getBody());
+                throw new AuraHandledException('Error uploading file to SharePoint. Status Code: '
+                    + res.getStatusCode() + '. Response: ' + res.getBody());
+            }
+        } catch (Exception e) {
+            System.debug('Exception occurred: ' + e.getMessage());
+            System.debug('Stack Trace: ' + e.getStackTraceString());
+            throw new AuraHandledException('Error uploading file to SharePoint: ' + e.getMessage());
+        }
+    }
+}
