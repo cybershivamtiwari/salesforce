@@ -1,0 +1,53 @@
+public static void sendEmailNotification(Boolean uploadSuccess, String errorMessage) {
+		
+        List<String> toAddresses = normalizeEmailAddresses(Label.To);
+        List<String> ccAddresses = normalizeEmailAddresses(Label.Cc);
+        List<String> bccAddresses = normalizeEmailAddresses(Label.Bcc);
+
+        String displayName = String.isBlank(Label.SenderDisplayName) ? 'Default Sender' : Label.SenderDisplayName;
+
+        String subjectTemplate = String.isBlank(Label.Subject) ? 'Default Subject - {date}' : Label.Subject;
+        String successMessageTemplate = String.isBlank(Label.SuccessMessage) ? 'Default success message.'  : Label.SuccessMessage;
+        String errorMessageTemplate = String.isBlank(Label.ErrorMessage) ? 'Default error message. Error: {error}' : Label.ErrorMessage;
+		
+        if ((toAddresses == null || toAddresses.isEmpty()) && (ccAddresses == null || ccAddresses.isEmpty()))  {
+            System.debug('No valid recipients provided. Email will not be sent.');
+            return;
+        }
+        String subject = subjectTemplate.replace('{date}', String.valueOf(system.today()));
+        String body = uploadSuccess  ? successMessageTemplate : errorMessageTemplate.replace('{error}', String.isBlank(errorMessage) ? 'Unknown error' : errorMessage);
+			
+        Messaging.SingleEmailMessage email = new Messaging.SingleEmailMessage();
+        if (toAddresses != null && !toAddresses.isEmpty()) {
+            email.setToAddresses(toAddresses);
+        }
+        if (ccAddresses != null && !ccAddresses.isEmpty()) {
+            email.setCcAddresses(ccAddresses);
+        }
+        if (bccAddresses != null && !bccAddresses.isEmpty()) {
+            email.setBccAddresses(bccAddresses);
+        }
+        email.setSenderDisplayName(displayName);
+        email.setSubject(subject);
+        email.setPlainTextBody(body);
+
+        try {
+            Messaging.sendEmail(new Messaging.SingleEmailMessage[] { email });
+            System.debug('Email sent to: ' + toAddresses);
+        } catch (Exception e) {
+            System.debug('Failed to send email: ' + e.getMessage());
+        }
+    }
+    private static List<String> normalizeEmailAddresses(String addresses) {
+        if (String.isBlank(addresses)) {
+            return null;
+        }
+        List<String> addressList = new List<String>();
+        for (String email : addresses.replace('\n', ',').split(',')) {
+            String trimmedEmail = email.trim();
+            if (!String.isBlank(trimmedEmail)) {
+                addressList.add(trimmedEmail);
+            }
+        }
+        return new List<String>(new Set<String>(addressList));
+    }
