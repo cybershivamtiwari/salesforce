@@ -1,0 +1,171 @@
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+String reportId = 'ReportIds'; // Replace with the actual report ID
+
+ApexPages.PageReference report = new ApexPages.PageReference('/'+ReportId+'?csv=1&isdtp=p1');
+
+Messaging.EmailFileAttachment attachment = new Messaging.EmailFileAttachment();
+attachment.setFileName('report.csv');
+attachment.setBody(report.getContent());
+attachment.setContentType('text/csv');
+
+Messaging.SingleEmailMessage message = new Messaging.SingleEmailMessage();
+message.setFileAttachments(new Messaging.EmailFileAttachment[] { attachment });
+message.setSubject('Report');
+message.setPlainTextBody('The report is attached.');
+message.setToAddresses(new String[] { 'shivam@gmail.com' }); // Replace with recipient email
+
+Messaging.sendEmail(new Messaging.SingleEmailMessage[] { message });
+
+System.debug('Email sent successfully.');
+
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+public static Blob generateCSVReport() {
+        try {
+            String reportName = String.isNotBlank(Label.reportName) ? Label.reportName : null;
+            if (String.isBlank(reportName)) {
+                throw new AuraHandledException('Report name is missing or invalid in the custom label.');
+            }
+            
+            List<Report> reports = [SELECT Id, Name FROM Report WHERE Name = :reportName LIMIT 1];
+            
+            if (reports.isEmpty()) {
+                throw new AuraHandledException('No report found with the name: ' + reportName);
+            }
+    
+            Report reportRecord = reports[0];
+    
+            String reportUrl = String.format('/services/data/v56.0/analytics/reports/{0}?export=1&enc=UTF-8&xf=csv', new String[] { reportRecord.Id });
+    
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + reportUrl);
+            req.setMethod('GET');
+            req.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
+            req.setHeader('Accept', 'application/json');  
+    
+            Http http = new Http();
+            HttpResponse res = http.send(req);
+            if (res.getStatusCode() == 200) {
+                Map<String, Object> reportData = (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+				
+                System.debug('Response Body: ' + res.getBody());
+				
+                Map<String, Object> factMap = (Map<String, Object>) reportData.get('factMap');
+                Map<String, Object> tMap = (Map<String, Object>) factMap.get('T!T');
+                List<Object> reportRows = (List<Object>) tMap.get('rows');
+            
+                System.debug('Rows Data: ' + reportRows);
+				
+                Map<String, Object> extendedMetadata = (Map<String, Object>) reportData.get('reportExtendedMetadata');
+                Map<String, String> columnLabels = new Map<String, String>();
+            
+                if (extendedMetadata != null) {
+                    Map<String, Object> detailColumnInfo = (Map<String, Object>) extendedMetadata.get('detailColumnInfo');
+            
+                    if (detailColumnInfo != null) {
+						
+                        for (String key : detailColumnInfo.keySet()) {
+                            Map<String, Object> columnInfo = (Map<String, Object>) detailColumnInfo.get(key);
+                            if (columnInfo.containsKey('label')) {
+                                columnLabels.put(key, (String) columnInfo.get('label'));
+                            }
+                        }
+                    }
+                }
+            
+                System.debug('Column Labels: ' + columnLabels);
+				
+                String csvData = '';
+				
+                List<String> headers = new List<String>(columnLabels.values());
+                csvData += String.join(headers, ',') + '\n';
+				
+                for (Object rowObj : reportRows) {
+                    Map<String, Object> rowMap = (Map<String, Object>) rowObj;
+                    List<Object> dataCells = (List<Object>) rowMap.get('dataCells');
+            
+                    List<String> rowValues = new List<String>();
+            
+                    for (Object cellObj : dataCells) {
+                        Map<String, Object> cellMap = (Map<String, Object>) cellObj;
+                        String cellValue;
+            
+                        if (cellMap.get('label') instanceof Map<String, Object>) {
+                            Map<String, Object> valueMap = (Map<String, Object>) cellMap.get('label');
+                            cellValue = (valueMap.containsKey('amount')) ? String.valueOf(valueMap.get('amount')) : '';
+                        } else {
+                            cellValue = (cellMap.get('label') != null) ? String.valueOf(cellMap.get('label')) : '';
+                        }
+            
+                        rowValues.add('"' + cellValue.replace('"', '""') + '"'); 
+                    }
+            
+                    csvData += String.join(rowValues, ',') + '\n';
+                }
+            
+                System.debug('Generated CSV: ' + csvData);
+            
+                return Blob.valueOf(csvData);
+            } else {
+                System.debug('Failed to fetch report: ' + res.getStatus() + ' - ' + res.getBody());
+                throw new AuraHandledException(
+                    'Failed to generate report CSV. HTTP Status Code: ' + res.getStatus()
+                );
+            }
+            
+        } catch (QueryException qe) {
+            System.debug('QueryException: ' + qe.getMessage());
+            throw new AuraHandledException('Error fetching the report: ' + qe.getMessage());
+        } catch (Exception e) {
+            System.debug('Exception in generateCSVReport: ' + e.getMessage());
+            System.debug('Exception Stack Trace: ' + e.getStackTraceString());
+            throw new AuraHandledException('Error generating the report CSV: ' + e.getMessage());
+        }
+    }
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+public static Blob generateCSVReport() {
+        try {
+            String reportName = String.isNotBlank(Label.reportName) ? Label.reportName : null;
+            if (String.isBlank(reportName)) {
+                throw new AuraHandledException('Report name is missing or invalid in the custom label.');
+            }
+            
+            List<Report> reports = [SELECT Id, Name FROM Report WHERE Name = :reportName LIMIT 1];
+            
+            if (reports.isEmpty()) {
+                throw new AuraHandledException('No report found with the name: ' + reportName);
+            }
+    
+            Report reportRecord = reports[0];
+    
+            String reportUrl = String.format('/services/data/v56.0/analytics/reports/{0}?export=1&enc=UTF-8&xf=csv', new String[] { reportRecord.Id });
+    
+            HttpRequest req = new HttpRequest();
+            req.setEndpoint(URL.getOrgDomainUrl().toExternalForm() + reportUrl);
+            req.setMethod('GET');
+            req.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
+            req.setHeader('Accept', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    
+            Http http = new Http();
+            HttpResponse res = http.send(req);
+    
+            if (res.getStatusCode() == 200) {
+                return res.getBodyAsBlob();
+            } 
+             else {
+                System.debug('Failed to fetch report: ' + res.getStatus() + ' - ' + res.getBody());
+                throw new AuraHandledException(
+                    'Failed to generate report CSV. HTTP Status Code: ' + res.getStatus()
+                );
+            }
+        } catch (QueryException qe) {
+            System.debug('QueryException: ' + qe.getMessage());
+            throw new AuraHandledException('Error fetching the report: ' + qe.getMessage());
+        } catch (Exception e) {
+            System.debug('Exception in generateCSVReport: ' + e.getMessage());
+            System.debug('Exception Stack Trace: ' + e.getStackTraceString());
+            throw new AuraHandledException('Error generating the report CSV: ' + e.getMessage());
+        }
+    } 
