@@ -11,4 +11,4 @@ sfdx scanner:run --target "**/default/**" --format "csv" --outfile "pathToFile.c
 
 
 
-https://security.secure.force.com/security/tools/forcecom/scanner#
+https://security.my.salesforce-sites.com/security/tools/forcecom/scanner
