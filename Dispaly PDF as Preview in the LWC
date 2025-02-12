@@ -1,0 +1,96 @@
+https://www.salesforcebolt.com/2021/11/file-preview-modal-in-lightning-web-component.html#:~:text=Make%20sure%20to%20change%20below%20PDF%20setting%20in,--%3E%20Security%20--%3E%20File%20Upload%20and%20Download%20Security
+
+
+Make sure to change below PDF setting in Salesforce org to see the preview in browser otherwise it will download the file instead of preview : Go to Setup --> Security --> File Upload and Download Security
+
+
+<template>
+    <lightning-layout>
+        <lightning-layout-item size="4" class="slds-box slds-p-right_xx-small">
+            <template for:each={allFilesDataToBeDisplayed} for:item="file">
+                <div key={file.ContentDocumentId} class="slds-p-bottom_medium">
+                    <span   class="clickable-text"   data-contentdocumentid={file.ContentDocumentId}  onclick={handlePreview}>  
+                        {file.Title} 
+                     </span>
+                    <span class="slds-p-left_small">
+                        <lightning-icon  icon-name="standard:document_preview"   size="small"  onclick={handlePreview}  data-contentdocumentid={file.ContentDocumentId}> </lightning-icon>
+                    </span>
+                </div>
+            </template>
+        </lightning-layout-item>
+        <lightning-layout-item size="8" class="slds-box">
+            <template if:true={previewUrl}>
+                <iframe src={previewUrl} width="100%" height="600px"></iframe>
+            </template>
+        </lightning-layout-item>
+    </lightning-layout>
+</template>
+
+
+
+
+
+.clickable-text {
+    color: blue;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+
+
+import { LightningElement, wire, track, api } from 'lwc';
+import getRelatedFilesByEpisodeId from '@salesforce/apex/ShowUpcomingEncountersForLoggedInUser.getRelatedFilesByEpisodeId';
+
+export default class AttachmentForSmartChart extends LightningElement {
+    @api episodeId;
+    @track allFilesDataToBeDisplayed = [];
+    @track previewUrl = '';
+
+    @wire(getRelatedFilesByEpisodeId, { episodeId: '$episodeId' })
+    allFilesRelatedToEpisode({ error, data }) {
+        if (data) {
+            this.allFilesDataToBeDisplayed = data;
+        } else if (error) {
+            console.error('Error:', JSON.stringify(error));
+        }
+    }
+
+    handlePreview(event) {
+        const contentDocumentId = event.currentTarget.dataset.contentdocumentid;
+        if (contentDocumentId) {
+            this.previewUrl = `/sfc/servlet.shepherd/document/download/${contentDocumentId}`;
+        }
+    }
+}
+
+
+    @AuraEnabled(cacheable=true)
+    public static List<Map<String, String>> getRelatedFilesByEpisodeId(String episodeId) {
+        List<ContentDocumentLink> filesRelatedToEpisode = [ SELECT Id, LinkedEntityId, ContentDocumentId, ContentDocument.Title  FROM ContentDocumentLink WHERE LinkedEntityId = :episodeId];
+
+        List<String> documentIds = new List<String>();
+        Map<String, String> documentVersionMap = new Map<String, String>();
+        List<Map<String, String>> result = new List<Map<String, String>>();
+
+        for (ContentDocumentLink file : filesRelatedToEpisode) {
+            documentIds.add(file.ContentDocumentId);
+        }
+
+        if (!documentIds.isEmpty()) {
+            for (ContentVersion cv : [ SELECT Id, ContentDocumentId FROM ContentVersion WHERE ContentDocumentId IN :documentIds ORDER BY LastModifiedDate DESC ]) {
+                documentVersionMap.put(cv.ContentDocumentId, cv.Id);
+            }
+        }
+        for (ContentDocumentLink file : filesRelatedToEpisode) {
+            if (documentVersionMap.containsKey(file.ContentDocumentId)) {
+                Map<String, String> fileMap = new Map<String, String>();
+                fileMap.put('ContentDocumentId', file.ContentDocumentId);
+                fileMap.put('Title', file.ContentDocument.Title);
+                fileMap.put('ContentVersionId', documentVersionMap.get(file.ContentDocumentId));
+                result.add(fileMap);
+            }
+        }
+       return result;
+    }
+
+}
