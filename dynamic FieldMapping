@@ -1,0 +1,130 @@
+
+
+        Set<String> requiredFields = new Set<String>(fieldMappings.values());
+
+        String query = 'SELECT Id, ' + String.join(new List<String>(requiredFields), ', ') + ' FROM ' + sObjectType + ' WHERE Id IN :records';
+        List<SObject> queriedRecords = Database.query(String.escapeSingleQuotes(query));
+
+        List<SObject> recordsToUpdate = new List<SObject>();
+
+        for (SObject record : queriedRecords) {
+            SObject updatedRecord = record.clone(false, true); 
+            updatedRecord.put('Id', record.get('Id'));
+            Boolean hasChanges = false;
+
+            for (String targetFieldName : fieldMappings.keySet()) {
+                String sourceFieldName = fieldMappings.get(targetFieldName);
+                
+                Object sourceValue = record.get(sourceFieldName);
+
+                if (sourceValue == null) continue;
+
+                Schema.DescribeFieldResult targetFieldDescribe = Schema.getGlobalDescribe().get(sObjectType).getDescribe().fields.getMap() .get(targetFieldName).getDescribe();
+                Schema.DisplayType fieldType = targetFieldDescribe.getType();
+
+                if (!targetFieldDescribe.isAccessible() || !targetFieldDescribe.isUpdateable()) continue;
+
+                Boolean isValid = false;
+                if (fieldType == Schema.DisplayType.PICKLIST) {
+                    for (Schema.PicklistEntry entry : targetFieldDescribe.getPicklistValues()) {
+                        if (entry.getValue() == String.valueOf(sourceValue)) {
+                            isValid = true;
+                            break;
+                        }
+                    }
+                } else if (fieldType == Schema.DisplayType.DATE) {
+                    if (sourceValue instanceof Date) {
+                        isValid = true;
+                    } else if (sourceValue instanceof Datetime) {
+                        sourceValue = ((Datetime) sourceValue).date();
+                        isValid = true;
+                    }
+                } else if (fieldType == Schema.DisplayType.DATETIME) {
+                    if (sourceValue instanceof Datetime) {
+                        isValid = true;
+                    } else if (sourceValue instanceof Date) {
+                        sourceValue = Datetime.newInstance((Date) sourceValue, Time.newInstance(0, 0, 0, 0));
+                        isValid = true;
+                    }
+                } else if (fieldType == Schema.DisplayType.CURRENCY || fieldType == Schema.DisplayType.DOUBLE || fieldType == Schema.DisplayType.INTEGER) {
+                    isValid = sourceValue instanceof Decimal || sourceValue instanceof Double || sourceValue instanceof Integer;
+                    if (isValid) {
+                        if (sourceValue instanceof Decimal) {
+                            Decimal decimalValue = (Decimal) sourceValue;
+                            Integer intValue = decimalValue.intValue(); 
+                        } else if (sourceValue instanceof Double) {
+                            Double doubleValue = (Double) sourceValue;
+                            Decimal decimalValue = Decimal.valueOf(doubleValue);
+                            Integer intValue = decimalValue.intValue();
+                        } else if (sourceValue instanceof Integer) {
+                            Integer intValue = (Integer) sourceValue;
+                        }
+                    } 
+                } else if (fieldType == Schema.DisplayType.BOOLEAN) {
+                    isValid = sourceValue instanceof Boolean;
+                } else if (fieldType == Schema.DisplayType.STRING) {
+                    if (sourceValue instanceof String) {
+                        String stringValue = (String) sourceValue;
+                        Integer maxSize = targetFieldDescribe.getLength();
+                        if (maxSize != null && maxSize > 0) { 
+                            if (stringValue.length() > maxSize) {
+                                sourceValue = stringValue.substring(0, maxSize);
+                            }
+                        }
+                        isValid = true;
+                    } else {
+                        isValid = false;
+                    }
+                } else if (fieldType == Schema.DisplayType.REFERENCE) {
+                    List<Schema.SObjectType> referenceTypes = targetFieldDescribe.getReferenceTo();
+                    if (referenceTypes.size() > 0) {
+                        Schema.SObjectType referenceType = referenceTypes[0];
+                        String referenceObjectName = referenceType.getDescribe().getName();
+                        if (sourceValue != null && sourceValue instanceof String) {
+                            String sourceIdStr = (String) sourceValue; 
+                            if (isValidIdForObject(sourceIdStr, referenceType)) {
+                                updatedRecord.put(targetFieldName, Id.valueOf(sourceIdStr)); 
+                                isValid = true;
+                            } 
+                        } 
+                    } 
+                } else if (fieldType == Schema.DisplayType.ADDRESS) {
+                    isValid = true;
+                }
+                if (isValid) {
+                    updatedRecord.put(targetFieldName, sourceValue);
+                    hasChanges = true;
+                }
+            }
+
+            if (hasChanges) {
+                recordsToUpdate.add(updatedRecord);
+                system.debug('recordsToUpdate'+recordsToUpdate);
+            }
+        }
+
+        if (!recordsToUpdate.isEmpty()) {
+            Database.SaveResult[] saveResults = Database.update(recordsToUpdate, false , AccessLevel.USER_MODE);
+            for (Database.SaveResult sr : saveResults) {
+                if (!sr.isSuccess()) {
+                    for (Database.Error err : sr.getErrors()) {
+                        throw new AuraHandledException('Error updating record: ' + err.getMessage());
+                    }
+                }
+            }
+        }
+    }
+    public static Boolean isValidIdForObject(String idValue, Schema.SObjectType referenceType) {
+        if (String.isEmpty(idValue)) {  
+            return false;
+        }
+        try {
+            Id id = Id.valueOf(idValue);
+            Schema.SObjectType objType = id.getSObjectType();
+            return objType == referenceType; 
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+}
