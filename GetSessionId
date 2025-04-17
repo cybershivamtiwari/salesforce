@@ -1,0 +1,7 @@
+String sessionId = userInfo.getSessionId();
+
+//You will see a message 'SESSION_ID REMOVED'
+System.debug('Session id '+sessionId); 
+
+//You will see the session id
+System.debug('Session id '+UserInfo.getOrganizationId() + UserInfo.getSessionId().substring(15));
