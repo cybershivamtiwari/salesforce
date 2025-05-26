@@ -1,0 +1,110 @@
+List<Lead> testLeads = new List<Lead>{
+    new Lead(FirstName = 'Alice', LastName = 'Johnson', Company = 'Tech World'),
+    new Lead(FirstName = 'Bob', LastName = 'Smith', Company = 'Innovate LLC'),
+    new Lead(FirstName = 'Charlie', LastName = 'Brown', Company = 'Creative Minds')
+};
+
+insert testLeads;
+
+List<Lead> insertedLeads = [SELECT Id, FirstName, LastName, Name, Pain__c FROM Lead WHERE Id IN :testLeads];
+System.debug('Inserted Leads: ' + insertedLeads);
+
+for (Lead lead : insertedLeads) {
+    lead.FirstName = 'Updated ' + lead.FirstName;
+}
+update insertedLeads;
+
+List<Lead> updatedLeads = [SELECT Id, FirstName, LastName, Name, Pain__c FROM Lead WHERE Id IN :testLeads];
+System.debug('Updated Leads: ' + updatedLeads);
+
+for (Lead lead : updatedLeads) {
+    System.debug('Lead After Update: Id = ' + lead.Id + ', Name = ' + lead.Name + ', Pain__c = ' + lead.Pain__c);
+}
+6:23
+if (DynamicFieldMapping.isTriggerExecuted) {
+        return;
+    }
+    
+    DynamicFieldMapping.isTriggerExecuted = true;
+
+    try {
+        if (Trigger.isBefore) {
+            for (Lead lead : Trigger.new) {
+                lead.Pain__c = lead.Name;
+            }
+        }
+
+        if (Trigger.isAfter) {
+            List<Id> leadIds = new List<Id>();
+            for (Lead lead : Trigger.new) {
+                leadIds.add(lead.Id);
+            }
+
+            if (!leadIds.isEmpty()) {
+                DynamicFieldMapping.updateLeadPainField(leadIds);
+            }
+        }
+    } finally {
+        DynamicFieldMapping.isTriggerExecuted = false; 
+    }
+
+
+Shivam Tiwari(NOI)
+  6:54 PM
+trigger TestDynamicMappingLeadTrigger on Lead (after insert, after update) {
+    if (Trigger.isAfter) {
+        if (Trigger.isInsert || Trigger.isUpdate) {
+            if (DynamicFieldMapping.isTriggerExecuted) {
+                return;
+            }
+            DynamicFieldMapping.isTriggerExecuted = true;
+            try {
+                List<Lead> leadsToUpdate = new List<Lead>();
+                for (Lead lead : Trigger.new) {
+                    leadsToUpdate.add(new Lead(Id = lead.Id, Pain__c = lead.Name));
+                }
+                if (!leadsToUpdate.isEmpty()) {
+                    update leadsToUpdate;
+                    system.debug('leadsToUpdate'+leadsToUpdate);
+                }
+            } finally {
+                DynamicFieldMapping.isTriggerExecuted = false;
+            }
+        }
+    }
+}
+
+
+Shivam Tiwari(NOI)
+  7:28 PM
+trigger TestDynamicMappingLeadTrigger on Lead (after insert, after update) {
+    if (Trigger.isAfter) {
+        if (Trigger.isInsert || Trigger.isUpdate) {
+            if (DynamicFieldMapping.isTriggerExecuted) {
+                return;
+            }
+            
+            DynamicFieldMapping.isTriggerExecuted = true; 
+            
+            try {
+                List<Lead> leadsToUpdate = new List<Lead>();
+                Map<String, Lead> leadMap = new Map<String, Lead>();
+                for (Lead lead : Trigger.new) {
+                   leadMap.put(lead.Id, null);
+                }
+                for (Lead lead : [Select Id ,Name from Lead where Id in :leadMap.keySet()]) {
+                   leadMap.put(lead.Id, lead);
+                }
+                for (Lead lead : Trigger.new) {
+                    leadsToUpdate.add(new Lead(Id = lead.Id, Pain__c = leadMap.get(lead.Id).Name));
+                }
+                if (!leadsToUpdate.isEmpty()) {
+                    update leadsToUpdate;
+                    system.debug('leadsToUpdate'+leadsToUpdate);
+                }
+            } finally {
+                DynamicFieldMapping.isTriggerExecuted = false; 
+            }
+        }
+    }
+}
