@@ -1,0 +1,139 @@
+Change the user using Rest API.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+Step:1 Create the External Connected App to retieve the ClientID and Client Secret.
+
+Step:2 Create the custom field "Sync_To_Q__c" on the Sobject (DateType=boolean).
+
+Step:3 Create the Trigger on the Sobject to call the apex class.
+
+trigger PatientTrigger on Patient__c (after insert) {
+       Handler.handle(Trigger.New);
+}
+
+---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+step:4 create the apex class 
+
+public without sharing class Handler {
+    public Handler() {
+
+    }
+
+    public static void handle(List<Patient__c> test){
+        switchToFuture(String.valueOf(test[0].id));
+    }
+
+    @future(Callout=true)
+    public static void switchToFuture(String testId){
+        String endpointURL = URL.getOrgDomainUrl().toExternalForm() + '/services/apexrest/UserChangeTest?_HttpMethod=PATCH';
+        String reqBody = '{"recordId":"' + testId+ '"}';
+        Map<String,Object> accessTokenResMap = getAccessTokenUsingClientCreds();
+        Map<String , String> calloutHeaders = New Map<String ,String>();
+        calloutHeaders.put('Authorization','Bearer ' + String.valueOf(accessTokenResMap.get('accessToken')));
+        calloutHeaders.put('Content-Type', 'application/json');
+        calloutHeaders.put('accept', 'application/json');
+
+        HttpResponse response = makeCallout(reqBody, endpointURL , calloutHeaders , 'POST');
+    }
+
+    public static HttpResponse makeCallout(String body , String endpoint , Map<String , String> headers , String method){
+        try{
+
+            HttpRequest httpRequestObject = new HttpRequest();
+            httpRequestObject.setEndpoint(endpoint);
+            httpRequestObject.setMethod(method);
+            httpRequestObject.setTimeout(120000);
+
+            if(String.isNotEmpty(method)){
+                if(method.equalsIgnoreCase('POST')){
+                    httpRequestObject.setBody(body);
+                }
+                if(method.equalsIgnoreCase('PUT')){
+                    httpRequestObject.setBody(body);
+                }
+            }
+            
+            if(headers != null && !headers.isEmpty()){
+                for(String headerKey : headers.keySet()){
+                    httpRequestObject.setHeader(headerKey, headers.get(headerKey));
+                } 
+            }
+        
+            Http httpObject = new Http();
+            HttpResponse httpResponseObject = httpObject.send(httpRequestObject);
+            System.debug('endpoint>>'+endpoint);
+            System.debug('res>>'+JSON.serializePretty(httpResponseObject.getBody()));
+
+            return httpResponseObject;
+        }
+        catch (Exception ex) {            
+            return null;
+        }      
+    }
+
+
+    public static Map<String,Object> getAccessTokenUsingClientCreds(){
+
+        Map<String,Object> accessTokenResMap = New Map<String,Object>();
+
+        try{
+
+            String clientid= '.XLNemFfBZB21ILXOSfLsAWJKkpX';
+            String clientSecret = '';
+
+            String reqbody = 'grant_type=client_credentials&client_id=' + clientid + '&client_secret=' + clientSecret;
+            String endpointURL = URL.getOrgDomainUrl().toExternalForm() + '/services/oauth2/token';
+            HttpResponse response = makeCallout(reqbody, endpointURL , null , 'POST');
+            
+            System.debug('in access token11>>'+JSON.serializePretty(response.getBody()));
+            if (response.getStatusCode() == 200) {
+                OAuth2 objAuthenticationInfo = (OAuth2) JSON.deserialize(response.getBody(), OAuth2.class);
+                accessTokenResMap.put('isSuccess', true);
+                accessTokenResMap.put('accessToken', objAuthenticationInfo.access_token);
+            } else {
+                accessTokenResMap.put('isSuccess', false);
+                accessTokenResMap.put('message', response.getBody());
+            }
+
+            System.debug('in access token>>'+accessTokenResMap);
+
+        }catch(Exception ex){
+            accessTokenResMap.put('isSuccess', false);
+            accessTokenResMap.put('message', ex.getMessage());
+        }
+
+        return accessTokenResMap;
+    }
+
+    public class OAuth2{
+        public String id{get;set;}
+        public String issued_at{get;set;}
+        public String instance_url{get;set;}
+        public String signature{get;set;}
+        public String access_token{get;set;}    
+    }
+   
+}
+
+-----------------------------------------------------------------------------
+-----------------------------------------------------------------------------
+
+Step:5 create the REST API
+
+@RestResource(urlMapping='/UserChangeTest/*')
+global without sharing class UserChangeTest {
+
+    @HttpPatch
+    global static void userChangeTest(String  recordId) {
+        System.debug('recordId>>>1'+recordId);
+        update new Patient__c(Id=recordId,Sync_To_Q__c = true);
+    }
+
+}
+
+--------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------
+6. create the flow on the Sobject to Make Callout when the field "Sync_To_Q__c" is true
+
+7. Create the apex Class to make the Callout.
