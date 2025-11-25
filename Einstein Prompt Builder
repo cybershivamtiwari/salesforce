@@ -1,0 +1,80 @@
+Prompt
+======================================
+You are a JSON data processor. 
+I will provide a JSON array of Contact records. 
+Your task is:
+
+1. Parse the JSON.
+2. Identify duplicate contacts based ONLY on the Email field.
+3. Count how many times each email appears.
+4. Return the results in the following format:
+
+{
+ "duplicateSummary": [
+ {
+  "Email": "<email>",
+  "Count": <number_of_times_email_appears>,
+  "IsDuplicate": true/false
+ }
+ ],
+ "totalDuplicates": <total_number_of_duplicate_records>
+}
+
+Rules:
+- Ignore case for email comparisons (treat "ABC@X.com" same as "abc@x.com").
+- A record is considered duplicate when an email appears more than once.
+- Output must be valid JSON.
+- Do not add explanations, only return the result JSON.
+
+The text that you are suppose to parse is provided here:
+{!$Input:InputJSON}
+
+
+=============================================================================================
+public with sharing class GenericPromptController {
+
+    @AuraEnabled
+    public static String getDuplicateCount(String contactJson) {
+        ConnectApi.WrappedValue inputValueMapJson = new ConnectApi.WrappedValue();
+        inputValueMapJson.value = contactJson;
+        Map<String, ConnectApi.WrappedValue> inputParams = new Map<String, ConnectApi.WrappedValue>();        
+        inputParams.put('Input:InputJson', inputValueMapJson);
+
+        ConnectApi.EinsteinPromptTemplateGenerationsInput promptGenerationsInput = new ConnectApi.EinsteinPromptTemplateGenerationsInput();
+    
+        promptGenerationsInput.inputParams = inputParams;
+        promptGenerationsInput.additionalConfig = new ConnectApi.EinsteinLlmAdditionalConfigInput();
+        promptGenerationsInput.additionalConfig.numGenerations = 1;
+        promptGenerationsInput.additionalConfig.enablePiiMasking = true;
+        promptGenerationsInput.additionalConfig.applicationName = 'PromptTemplateGenerationsInvocable';
+        promptGenerationsInput.isPreview = false;
+
+        ConnectApi.EinsteinPromptTemplateGenerationsRepresentation generationsOutput = ConnectApi.EinsteinLLM.generateMessagesForPromptTemplate('Generic_Duplicate_JSON', promptGenerationsInput);
+        ConnectApi.EinsteinLLMGenerationItemOutput response = generationsOutput.generations[0]; 
+        System.debug('response==>'+response);   
+        return response.text;
+    }
+}
+=============================================================================================
+public with sharing class GenericDuplicateDetector {
+    @InvocableMethod(label='Check Duplicates from JSON' description='Checks for duplicate contacts in a JSON string and returns the count.')
+    public static List<Integer> getDuplicateCount(List<String> jsonStrings) {
+        String contactJson = jsonStrings[0];
+        List<Contact> contactsList = (List<Contact>) JSON.deserialize(contactJson, List<Contact>.class);
+        
+        Set<String> uniqueEmails = new Set<String>();
+        Integer duplicateCount = 0;
+        
+        for (Contact c : contactsList) {
+            if (c.Email != null) {
+                if (uniqueEmails.contains(c.Email.toLowerCase())) {
+                    duplicateCount++;
+                } else {
+                    uniqueEmails.add(c.Email.toLowerCase());
+                }
+            }
+        }
+        System.debug('DuplicateRecord==>'+duplicateCount);
+        return new List<Integer>{duplicateCount};
+    }
+}
