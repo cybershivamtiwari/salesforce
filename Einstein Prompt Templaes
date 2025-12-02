@@ -1,0 +1,464 @@
+Prompt templates
+==========================================================================================
+You MUST output ONLY valid JSON.
+Do NOT include explanations, descriptions, comments, or text before or after the JSON.
+
+INPUT:
+JSON array: {!$Input:InputJSON}
+Duplicate key: {!$Input:DuplicateKey}
+
+REQUIREMENTS:
+- Compare values case-insensitively.
+- If key is missing, treat value as null.
+- Count occurrences of each key value.
+- Identify duplicates (Count > 1).
+- Output only the final JSON structure shown below.
+
+OUTPUT FORMAT (STRICT):
+{
+ "duplicateSummary": [
+  {
+   "Key": "<key_name>",
+   "Value": "<value>",
+   "Count": <integer>,
+   "IsDuplicate": <true_or_false>
+  }
+ ],
+ "totalDuplicates": <integer>
+}
+
+OUTPUT ONLY JSON. NOTHING ELSE.
+==========================================================================================
+public with sharing class DuplicatesDetectorApexController {
+    
+   /*public static String getDuplicateCounts(String objectJson, String duplicateKey) { 
+        ConnectApi.WrappedValue inputJsonWrapper = new ConnectApi.WrappedValue();
+        inputJsonWrapper.value = objectJson;
+       
+        ConnectApi.WrappedValue keyWrapper = new ConnectApi.WrappedValue();
+        keyWrapper.value = duplicateKey;
+       
+        Map<String, ConnectApi.WrappedValue> inputParams = new Map<String, ConnectApi.WrappedValue>();
+        inputParams.put('Input:InputJSON', inputJsonWrapper);
+        inputParams.put('Input:DuplicateKey', keyWrapper);
+       
+        ConnectApi.EinsteinPromptTemplateGenerationsInput promptGenerationsInput =
+            new ConnectApi.EinsteinPromptTemplateGenerationsInput();
+
+        promptGenerationsInput.inputParams = inputParams;
+        promptGenerationsInput.additionalConfig = new ConnectApi.EinsteinLlmAdditionalConfigInput();
+        promptGenerationsInput.additionalConfig.numGenerations = 1;
+        promptGenerationsInput.additionalConfig.enablePiiMasking = true;
+        promptGenerationsInput.additionalConfig.applicationName = 'PromptTemplateGenerationsInvocable';
+        promptGenerationsInput.isPreview = false;
+       
+        ConnectApi.EinsteinPromptTemplateGenerationsRepresentation generationsOutput =
+            ConnectApi.EinsteinLLM.generateMessagesForPromptTemplate('Duplicates_Detector_AI', promptGenerationsInput);
+
+        ConnectApi.EinsteinLLMGenerationItemOutput response = generationsOutput.generations[0];
+
+        System.debug('Duplicate Check Response ==> ' + response);
+
+        return response.text;
+    }*/
+    public static String getDuplicateCount(String objectJson, String duplicateKey) {
+        ConnectApi.WrappedValue inputJsonWrapper = new ConnectApi.WrappedValue();
+        inputJsonWrapper.value = objectJson;
+       
+        ConnectApi.WrappedValue keyWrapper = new ConnectApi.WrappedValue();
+        keyWrapper.value = duplicateKey;
+       
+        Map<String, ConnectApi.WrappedValue> inputParams = new Map<String, ConnectApi.WrappedValue>{
+            'Input:InputJSON' => inputJsonWrapper,
+            'Input:DuplicateKey' => keyWrapper
+        };
+       
+        ConnectApi.EinsteinPromptTemplateGenerationsInput input = new ConnectApi.EinsteinPromptTemplateGenerationsInput();
+
+        input.inputParams = inputParams;
+        input.additionalConfig = new ConnectApi.EinsteinLlmAdditionalConfigInput();
+        input.additionalConfig.numGenerations = 1;
+        input.additionalConfig.enablePiiMasking = true;
+        input.additionalConfig.applicationName = 'PromptTemplateGenerationsInvocable';
+        input.isPreview = false;
+       
+        ConnectApi.EinsteinPromptTemplateGenerationsRepresentation output = ConnectApi.EinsteinLLM.generateMessagesForPromptTemplate('Duplicates_Detector_AI',input);
+		
+        return output.generations[0].text;
+    }
+}
+==========================================================================================
+public with sharing class GenericDuplicateSummaryClass {
+    /*@AuraEnabled
+    public static String getAllDuplicateSummaries() {
+        Map<String, String> objectFieldMap = new Map<String, String>{
+            'Product2'                  => 'ProductCode',
+            'SBQQ__QuoteLine__c'        => 'SBQQ__ProductName__c',
+            'SBQQ__Quote__c'            => 'SBQQ__BillingName__c',
+            'SBQQ__PriceRule__c'        => 'Name',
+            'SBQQ__ProductRule__c'      => 'Name'
+        };
+        Map<String, Object> finalResponse = new Map<String, Object>();
+        for (String objName : objectFieldMap.keySet()) {
+
+            String fieldName = objectFieldMap.get(objName);
+            finalResponse.put(objName, getDuplicateSummary(objName, fieldName));
+        }
+		system.debug('response----->'+JSON.serialize(finalResponse));
+        return JSON.serialize(finalResponse);
+    }
+    private static Map<String, Object> getDuplicateSummary(String objectName, String fieldName) {
+
+        String soql = 'SELECT Id, ' + fieldName + ' FROM ' + objectName +  ' WHERE ' + fieldName + ' != null';
+        Database.Cursor cursor = Database.getCursor(soql);
+        
+        Integer position = 0;
+        Integer chunkSize = 200;
+        Integer total = cursor.getNumRecords();
+
+        Map<String, Integer> counts = new Map<String, Integer>();
+        while (position < total) {
+            Integer remaining = total - position;
+            Integer fetchCount = remaining < chunkSize ? remaining : chunkSize;
+            List<SObject> chunk = cursor.fetch(position, fetchCount);
+            for (SObject sobj : chunk) {
+                Object rawVal = sobj.get(fieldName);
+                if (rawVal != null) {
+                    String keyVal = String.valueOf(rawVal).trim().toLowerCase();
+                    counts.put(keyVal, counts.containsKey(keyVal) ? counts.get(keyVal) + 1 : 1);
+                }
+            }
+            position += chunk.size();
+        }
+
+        List<Object> summary = new List<Object>();
+        Integer totalDuplicateRecords = 0;
+        
+        for (String keyVal : counts.keySet()) {
+            Integer countVal = counts.get(keyVal);
+            if (countVal > 1) {
+                Integer duplicates = countVal - 1;
+                totalDuplicateRecords += duplicates;
+
+                summary.add(new Map<String, Object>{
+                    'KeyValue'   => keyVal,
+                    'Duplicates' => duplicates
+                });
+            }
+        }
+
+        return new Map<String, Object>{
+            'objectName'            => objectName,
+            'fieldName'             => fieldName,
+            'duplicateSummary'      => summary,
+            'totalDuplicateRecords' => totalDuplicateRecords
+        };
+    }*/
+   @AuraEnabled
+   public static String getProductDuplicateSummaryMethod() {
+        Database.Cursor cursor = Database.getCursor('SELECT Id, ProductCode FROM Product2 WHERE ProductCode != null'); 
+        Integer position = 0;
+        Integer chunkSize = 200;
+        Integer total = cursor.getNumRecords();
+        Map<String, Integer> counts = new Map<String, Integer>();
+        while (position < total) { 
+            Integer remaining = total - position;
+            Integer fetchCount = remaining < chunkSize ? remaining : chunkSize;
+            List<Product2> chunk = (List<Product2>) cursor.fetch(position, fetchCount);
+            for (Product2 p : chunk) {
+                if (p.ProductCode != null) {
+                    String code = p.ProductCode.toLowerCase();
+                    counts.put(code, counts.containsKey(code) ? counts.get(code) + 1 : 1);
+                }
+            }
+            position += chunk.size();
+        }
+        List<Object> summary = new List<Object>();
+        Integer totalDuplicateRecords = 0;
+        for (String codeVal : counts.keySet()) {
+            Integer countVal = counts.get(codeVal);
+            if (countVal > 1) {
+                Integer duplicates = countVal - 1;
+                totalDuplicateRecords += duplicates;
+                summary.add(new Map<String, Object>{'ProductCode' => codeVal,'Duplicates'  => duplicates});
+            }
+        }
+        String jsonResult = JSON.serialize(
+            new Map<String, Object>{
+                'duplicateSummary'       => summary,
+                'totalDuplicateRecords'  => totalDuplicateRecords }
+        );
+        return jsonResult;
+    }
+    
+   /* public static String getDuplicateSummaryMethod(String objectName, String fieldName) {
+
+        String soql = 'SELECT Id, ' + fieldName + ' FROM ' + objectName + 
+                      ' WHERE ' + fieldName + ' != null';
+
+        Database.Cursor cursor = Database.getCursor(soql);
+
+        Integer position = 0;
+        Integer chunkSize = 200;
+        Integer total = cursor.getNumRecords();
+
+        Map<String, Integer> counts = new Map<String, Integer>();
+
+        while (position < total) {
+
+            Integer remaining = total - position;
+            Integer fetchCount = remaining < chunkSize ? remaining : chunkSize;
+
+            List<SObject> chunk = cursor.fetch(position, fetchCount);
+
+            for (SObject sobj : chunk) {
+                Object rawVal = sobj.get(fieldName);
+                if (rawVal != null) {
+                    String keyVal = String.valueOf(rawVal).toLowerCase();
+                    counts.put(keyVal, counts.containsKey(keyVal) ? counts.get(keyVal) + 1 : 1);
+                }
+            }
+
+            position += chunk.size();
+        }
+
+        List<Object> summary = new List<Object>();
+        Integer totalDuplicateRecords = 0;
+
+        for (String keyVal : counts.keySet()) {
+            Integer countVal = counts.get(keyVal);
+            if (countVal > 1) {
+                Integer duplicates = countVal - 1;
+                totalDuplicateRecords += duplicates;
+
+                summary.add(new Map<String, Object>{
+                    'KeyValue'   => keyVal,
+                    'Duplicates' => duplicates
+                });
+            }
+        }
+
+        String jsonResult = JSON.serialize(
+            new Map<String, Object>{
+                'objectName'            => objectName,
+                'fieldName'             => fieldName,
+                'duplicateSummary'      => summary,
+                'totalDuplicateRecords' => totalDuplicateRecords
+            }
+        );
+
+        return jsonResult;
+    }*/
+    //  @AuraEnabled
+    // public static String getAllDuplicateSummaries() {
+
+    //     Map<String, String> objectFieldMap = new Map<String, String>{
+    //         'Product2'                  => 'ProductCode',
+    //         'SBQQ__QuoteLine__c'        => 'SBQQ__ProductName__c',
+    //         'SBQQ__Quote__c'            => 'SBQQ__BillingName__c',
+    //         'SBQQ__PriceRule__c'        => 'Name',
+    //         'SBQQ__ProductRule__c'      => 'Name'
+    //     };
+
+    //     Map<String, Object> finalResponse = new Map<String, Object>();
+
+    //     for (String objName : objectFieldMap.keySet()) {
+    //         finalResponse.put(objName, getDuplicateSummary(objName, objectFieldMap.get(objName)));
+    //     }
+    //     system.debug('json--->'+JSON.serialize(finalResponse));
+    //     return JSON.serialize(finalResponse);
+    // }
+    // private static Map<String, Object> getDuplicateSummary(String objectName, String fieldName) {
+    //     String soql = 'SELECT Id, ' + fieldName + ' FROM ' + objectName + ' WHERE ' + fieldName + ' != null';
+
+    //     Database.Cursor cursor = Database.getCursor(soql);
+    //     Integer total = cursor.getNumRecords();
+        
+    //     List<SObject> allRecords = cursor.fetch(0, total);
+    //     Map<String, Integer> counts = new Map<String, Integer>();
+    //     for (SObject sobj : allRecords) {
+    //         Object raw = sobj.get(fieldName);
+    //         if (raw != null) {
+    //             String key = String.valueOf(raw).trim().toLowerCase();
+    //             counts.put(key, counts.containsKey(key) ? counts.get(key) + 1 : 1);
+    //         }
+    //     }
+
+    //     List<Object> summary = new List<Object>();
+    //     Integer totalDup = 0;
+
+    //     for (String key : counts.keySet()) {
+    //         Integer count = counts.get(key);
+    //         if (count > 1) {
+    //             summary.add(new Map<String, Object>{
+    //                 'KeyValue' => key,
+    //                 'Duplicates' => count - 1
+    //             });
+    //             totalDup += (count - 1);
+    //         }
+    //     }
+    //     return new Map<String, Object>{
+    //         'objectName'            => objectName,
+    //         'fieldName'             => fieldName,
+    //        // 'duplicateSummary'      => summary,
+    //         'totalDuplicateRecords' => totalDup
+    //     };
+    // }
+    @AuraEnabled
+    public static String getAllDuplicateSummaries() {
+        Map<String, String> objectLabelMap = new Map<String, String>{
+            'Product2'                  => 'Products',
+            'SBQQ__QuoteLine__c'        => 'Quote Lines',
+            'SBQQ__Quote__c'            => 'Quotes',
+            'SBQQ__PriceRule__c'        => 'Price Rules',
+            'SBQQ__ProductRule__c'      => 'Product Rules'
+        };
+        Map<String, String> fieldLabelMap = new Map<String, String>{
+            'ProductCode'               => 'Product Code',
+            'SBQQ__ProductName__c'      => 'Product Name',
+            'SBQQ__BillingName__c'      => 'Billing Name',
+            'Name'                      => 'Name'
+        };
+        Map<String, String> objectFieldMap = new Map<String, String>{
+            'Product2'                  => 'ProductCode',
+            'SBQQ__QuoteLine__c'        => 'SBQQ__ProductName__c',
+            'SBQQ__Quote__c'            => 'SBQQ__BillingName__c',
+            'SBQQ__PriceRule__c'        => 'Name',
+            'SBQQ__ProductRule__c'      => 'Name'
+        };
+        Map<String, Object> finalResponse = new Map<String, Object>();
+        for (String objectApi : objectFieldMap.keySet()) {
+            String fieldApi = objectFieldMap.get(objectApi);
+            String objectLabel = objectLabelMap.get(objectApi);
+            String fieldLabel  = fieldLabelMap.get(fieldApi);
+            finalResponse.put(objectLabel, getDuplicateSummary(objectApi, fieldApi, fieldLabel));
+        }
+        return JSON.serializePretty(finalResponse);
+    }
+    private static Map<String, Object> getDuplicateSummary(String objectApi, String fieldApi, String fieldLabel) {
+        String soql = 'SELECT ' + fieldApi +
+                       ' FROM ' + objectApi +
+                       ' WHERE ' + fieldApi + ' != null';
+        Database.Cursor cursor = Database.getCursor(soql);
+        Integer total = cursor.getNumRecords();
+        List<SObject> allRecords = cursor.fetch(0, total);
+        Map<String, Integer> counts = new Map<String, Integer>();
+        for (SObject sobj : allRecords) {
+            Object val = sobj.get(fieldApi);
+            if (val != null) {
+                String key = String.valueOf(val).trim().toLowerCase();
+                counts.put(key, counts.containsKey(key) ? counts.get(key) + 1 : 1);
+            }
+        }
+        List<Object> summary = new List<Object>();
+        Integer duplicatesTotal = 0;
+        for (String keyVal : counts.keySet()) {
+            Integer count = counts.get(keyVal);
+            if (count > 1) {
+                summary.add(new Map<String, Object>{
+                    fieldLabel   => keyVal,
+                    'Duplicates' => count - 1
+                });
+                duplicatesTotal += (count - 1);
+            }
+        }
+        return new Map<String, Object>{
+            'Field'                => fieldLabel,
+            'Duplicate Summary'    => summary,
+            'Total Duplicates'     => duplicatesTotal
+        };
+    }
+     @AuraEnabled
+    public static String getAllDuplicateObjectSummaries() {  
+        Map<String, String> objectLabelMap = new Map<String, String>{
+           'Product2'                  => 'Products', 
+           'SBQQ__QuoteLine__c'        => 'Quote Lines',
+           'SBQQ__Quote__c'            => 'Quotes',
+           'SBQQ__PriceRule__c'        => 'Price Rules',
+           'SBQQ__ProductRule__c'      => 'Product Rules'
+       };
+       Map<String, String> fieldLabelMap = new Map<String, String>{
+          'ProductCode'               => 'Product Code',
+          'SBQQ__ProductName__c'      => 'Product Name',
+          'SBQQ__BillingName__c'      => 'Billing Name',
+          'Name'                      => 'Name'
+       };
+        Map<String, String> objectFieldMap = new Map<String, String>{
+            'Product2'                  => 'ProductCode',
+            'SBQQ__QuoteLine__c'        => 'SBQQ__ProductName__c',
+            'SBQQ__Quote__c'            => 'SBQQ__BillingName__c',
+            'SBQQ__PriceRule__c'        => 'Name',
+            'SBQQ__ProductRule__c'      => 'Name'
+       };                       
+       
+       Map<String, Object> finalResponse = new Map<String, Object>();
+        for (String objectApi : objectFieldMap.keySet()) {
+            String fieldApi   = objectFieldMap.get(objectApi);
+            String fieldLabel = fieldLabelMap.get(fieldApi);
+            String objectLabel = objectLabelMap.get(objectApi);
+            Map<String, Object> summary = getSummaryForObject(objectApi, fieldApi, fieldLabel, objectLabel);
+            finalResponse.putAll(summary);
+        }
+        return JSON.serializePretty(finalResponse);
+    }
+    private static Map<String, Object> getSummaryForObject(String objectApi, String fieldApi,String fieldLabel,String objectLabel) {
+        String soql = 'SELECT ' + fieldApi + (objectApi == 'Product2' ? ', Name' : '') + ' FROM ' + objectApi + ' WHERE ' + fieldApi + ' != null'; 
+        Database.Cursor cursor = Database.getCursor(soql);
+        Integer total = cursor.getNumRecords();
+        List<SObject> records = cursor.fetch(0, total);
+        List<Object> jsonList = new List<Object>();
+        Map<String, String> productCodeToName = new Map<String, String>();
+        for (SObject s : records) {
+            Object keyValObj = s.get(fieldApi);
+            String normalizedKey = keyValObj == null ? null :String.valueOf(keyValObj).trim().toLowerCase();
+            jsonList.add(new Map<String, Object>{fieldApi => keyValObj });
+            if (objectApi == 'Product2') {
+                String productName = (String)s.get('Name');
+                if (normalizedKey != null && !productCodeToName.containsKey(normalizedKey)) {
+                    productCodeToName.put(normalizedKey, productName);
+                }
+            }
+            //jsonList.add(new Map<String, Object>{fieldApi => s.get(fieldApi) });
+        }
+        /*String jsonArray = JSON.serialize(jsonList);
+        String aiRawResponse = DuplicatesDetectorApexController.getDuplicateCounts(jsonArray, fieldApi);
+        aiRawResponse = aiRawResponse.replaceAll('[^\\x20-\\x7E\\n\\r\\t]', '');
+        Map<String, Object> aiResponse =(Map<String, Object>) JSON.deserializeUntyped(aiRawResponse);
+        Map<String, Object> innr = new Map<String, Object>();
+        innr.put('Field', fieldLabel);
+        innr.put('Duplicate Summary', aiResponse.get('duplicateSummary'));
+        innr.put('Total Duplicates', aiResponse.get('totalDuplicates'));
+        Map<String, Object> finalObject = new Map<String, Object>();
+        finalObject.put(objectLabel, innr);
+        return finalObject;*/
+        String jsonArray = JSON.serialize(jsonList);
+        String aiRawResponse = DuplicatesDetectorApexController.getDuplicateCount(jsonArray, fieldApi);
+        aiRawResponse = aiRawResponse.replaceAll('[^\\x20-\\x7E\\n\\r\\t]', '');
+        Map<String, Object> aiResponse =(Map<String, Object>) JSON.deserializeUntyped(aiRawResponse);
+        List<Object> dupList =(List<Object>)aiResponse.get('duplicateSummary');
+        if (objectApi == 'Product2') {
+            for (Object o : dupList) {
+                Map<String, Object> row = (Map<String, Object>)o;
+                Object aiValue = row.get('Value');
+                if (aiValue != null) {
+                    String normalizedAIKey =
+                        String.valueOf(aiValue).trim().toLowerCase();
+                    if (productCodeToName.containsKey(normalizedAIKey)) {
+                        row.put('Product Name', productCodeToName.get(normalizedAIKey));
+                    }
+                }
+            }
+        }
+        Map<String, Object> innr = new Map<String, Object>();
+        innr.put('Field', fieldLabel);
+        innr.put('Duplicate Summary', dupList);
+        innr.put('Total Duplicates', aiResponse.get('totalDuplicates'));
+        Map<String, Object> finalObject = new Map<String, Object>();
+        finalObject.put(objectLabel, innr);
+        return finalObject;
+    }
+}
+==========================================================================================
+
+==========================================================================================
+==========================================================================================
