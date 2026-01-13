@@ -1,0 +1,167 @@
+public class UpdateAllRemote {
+
+    @future(callout=true)
+    public static void updateAllRemoteSites(String sandboxName) {
+
+        Http http = new Http();
+        String baseUrl = URL.getOrgDomainUrl().toExternalForm();
+
+        /* ============================================================
+           1️⃣ Query Remote Sites (NO Metadata – multi-row allowed)
+           ============================================================ */
+        String listQuery =
+            'SELECT Id, SiteName, EndpointUrl ' +
+            'FROM RemoteProxy';
+
+        HttpRequest listReq = new HttpRequest();
+        listReq.setEndpoint(
+            baseUrl +
+            '/services/data/v60.0/tooling/query/?q=' +
+            EncodingUtil.urlEncode(listQuery, 'UTF-8')
+        );
+        listReq.setMethod('GET');
+        listReq.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
+        listReq.setHeader('Content-Type', 'application/json');
+
+        HttpResponse listRes = http.send(listReq);
+        if (listRes.getStatusCode() != 200) {
+            throw new CalloutException(
+                'RemoteProxy list query failed: ' + listRes.getBody()
+            );
+        }
+
+        Map<String, Object> listJson =
+            (Map<String, Object>) JSON.deserializeUntyped(listRes.getBody());
+
+        List<Object> records =
+            (List<Object>) listJson.get('records');
+
+        /* ============================================================
+           2️⃣ Loop Remote Sites
+           ============================================================ */
+        for (Object obj : records) {
+
+            Map<String, Object> record =
+                (Map<String, Object>) obj;
+
+            String id = (String) record.get('Id');
+            String name = (String) record.get('SiteName');
+            String oldUrl = (String) record.get('EndpointUrl');
+
+            if (String.isBlank(oldUrl)) {
+                continue;
+            }
+
+            /* ========================================================
+               🔹 Replace LAST DOT suffix
+               https://...net.Devsandbox → https://...net.Devsandbox1
+               ======================================================== */
+            Integer lastDot = oldUrl.lastIndexOf('.');
+            if (lastDot < 0) {
+                continue;
+            }
+
+            String newUrl =
+                oldUrl.substring(0, lastDot + 1) +
+                sandboxName;
+
+            if (oldUrl == newUrl) {
+                continue;
+            }
+
+            /* ========================================================
+               3️⃣ Query Metadata (SINGLE ROW ONLY – required)
+               ======================================================== */
+            String metaQuery =
+                'SELECT Id, Metadata ' +
+                'FROM RemoteProxy ' +
+                'WHERE Id = \'' + id + '\'';
+
+            HttpRequest metaReq = new HttpRequest();
+            metaReq.setEndpoint(
+                baseUrl +
+                '/services/data/v60.0/tooling/query/?q=' +
+                EncodingUtil.urlEncode(metaQuery, 'UTF-8')
+            );
+            metaReq.setMethod('GET');
+            metaReq.setHeader('Authorization', 'Bearer ' + UserInfo.getSessionId());
+            metaReq.setHeader('Content-Type', 'application/json');
+
+            HttpResponse metaRes = http.send(metaReq);
+            if (metaRes.getStatusCode() != 200) {
+                System.debug(':x: Metadata query failed → ' + name);
+                continue;
+            }
+
+            Map<String, Object> metaJson =
+                (Map<String, Object>) JSON.deserializeUntyped(metaRes.getBody());
+
+            List<Object> metaRecords =
+                (List<Object>) metaJson.get('records');
+
+            if (metaRecords.isEmpty()) {
+                continue;
+            }
+
+            Map<String, Object> metaRecord =
+                (Map<String, Object>) metaRecords[0];
+
+            Map<String, Object> metadata =
+                (Map<String, Object>) metaRecord.get('Metadata');
+
+            /* ========================================================
+               4️⃣ Update Metadata (CORRECT FIELD: url)
+               ======================================================== */
+            metadata.put('url', newUrl);
+            metadata.put('isActive', true);
+
+            /* ========================================================
+               5️⃣ PATCH RemoteProxy with FULL Metadata
+               ======================================================== */
+            HttpRequest patchReq = new HttpRequest();
+            patchReq.setEndpoint(
+                baseUrl +
+                '/services/data/v60.0/tooling/sobjects/RemoteProxy/' +
+                id
+            );
+            patchReq.setMethod('PATCH');
+            patchReq.setHeader(
+                'Authorization',
+                'Bearer ' + UserInfo.getSessionId()
+            );
+            patchReq.setHeader('Content-Type', 'application/json');
+
+            patchReq.setBody(
+                JSON.serialize(
+                    new Map<String, Object>{
+                        'Metadata' => metadata
+                    }
+                )
+            );
+
+            HttpResponse patchRes = http.send(patchReq);
+
+            if (patchRes.getStatusCode() >= 300) {
+                System.debug(
+                    ':x: FAILED → ' + name +
+                    ' | ' + patchRes.getBody()
+                );
+            } else {
+                System.debug(
+                    ':white_check_mark: UPDATED → ' + name +
+                    ' | ' + newUrl
+                );
+            }
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
