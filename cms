@@ -1,0 +1,416 @@
+Working Code 
+___________________________________________________________________________________________________________________
+{# 1. Identify the logged-in user #}
+{% set contact_id = request_contact.contact.hs_object_id %}
+
+{# 2. Fetch only Deals associated with this Contact via the 'Subscription' label (ID 18) #}
+{# Your data model confirms this is a USER_DEFINED 1-to-many relationship #}
+{% set associated_deals = crm_associations(contact_id, "USER_DEFINED", 18) %}
+{% set deal_ids = associated_deals.results|map(attribute='id')|join(',') %}
+
+{# 3. Define the properties you need to display #}
+{#% set pipeline_id = module.pipeline_id or "default" %#}
+{% set props = "dealname,frequency,last_payment_date,next_payment_date,last4,amount,dealstage" %}
+
+{# 4. The 'Where' logic: only fetch if IDs were found #}
+{% if deal_ids %}
+  {# This query filters the Deals object where the ID is in the user's list #}
+  {% set query = "hs_object_id__in=" ~ deal_ids %}
+  {% set deals = crm_objects("deal", query, props) %}
+{% else %}
+  {# Fallback to empty results if no associated 'Subscription' deals exist #}
+  {% set deals = { results: [] } %}
+{% endif %}
+<!-- <div style="background: #000; color: #0f0; padding: 20px; font-family: monospace; border: 2px solid red;">
+  <strong>DEBUG INFO:</strong><br>
+  Logged-in Contact ID: {#{ contact_id|default("NOT LOGGED IN") }}<br>
+  Associated Deal IDs found: {{ deal_ids|default("NONE FOUND") #}}<br>
+  Association ID Used: 18
+</div> -->
+
+<div class="donor-portal-wrapper">
+  <div class="container">
+    <h1>Recurring Donations</h1>
+    
+    <div class="table-container">
+      {% if deals.results|length > 0 %}
+        <table class="desktop-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Frequency</th>
+              <th>Last Payment</th>
+              <th>Next Payment</th>
+              <th>Card</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in deals.results %}
+              {# Correcting property access #}
+              {% set amt = d.amount|default(0) %}
+              {% set masked_card = d.last4 ? "****-****-****-" ~ d.last4 : "—" %}
+              
+              <tr data-deal-id="{{ d.id }}">
+                <td class="donor-name">{{ d.dealname or "—" }}</td>
+                <td>{{ d.frequency or "—" }}</td>
+                <td>{{ d.last_payment_date ? d.last_payment_date|datetimeformat('%b %d, %Y') : "—" }}</td>
+                <td>{{ d.next_payment_date ? d.next_payment_date|datetimeformat('%b %d, %Y') : "—" }}</td>
+                <td>{{ masked_card }}</td>
+                <td class="amount">{{ amt|format_currency("en-US", "USD") }}</td>
+                <td><span class="status-badge">{{ d.dealstage|capitalize|replace("_", " ") }}</span></td>
+                <td>
+                  <div class="actions">
+                    <a href="{{module.payment_link_url.url}}?dealId={{ d.id }}&action=update" class="btn btn-update">Update</a>
+                    <button class="btn btn-pause" data-action="pause" data-deal-id="{{ d.id }}">Pause</button>
+                    <button class="btn btn-cancel" data-action="cancel" data-deal-id="{{ d.id }}">Cancel</button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="mobile-cards">
+          {% for d in deals.results %}
+            <div class="card">
+              <div class="card-header">
+                <span class="card-name">{{ d.dealname or "—" }}</span>
+                <span class="status-badge">{{ d.dealstage|capitalize|replace("_", " ") }}</span>
+              </div>
+              <div class="card-grid">
+                <div class="card-field"><span class="card-label">Frequency</span><span class="card-value">{{ d.frequency or "—" }}</span></div>
+                <div class="card-field"><span class="card-label">Amount</span><span class="card-value">{{ d.amount|format_currency("en-US", "USD") }}</span></div>
+                <div class="card-field"><span class="card-label">Last Payment</span><span class="card-value">{{ d.last_payment_date ? d.last_payment_date|datetimeformat('%b %d, %Y') : "—" }}</span></div>
+                <div class="card-field"><span class="card-label">Next Payment</span><span class="card-value">{{ d.next_payment_date ? d.next_payment_date|datetimeformat('%b %d, %Y') : "—" }}</span></div>
+                <div class="card-field"><span class="card-label">Card</span><span class="card-value">**** {{ d.last4 }}</span></div>
+              </div>
+              <div class="card-actions">
+                <a href="{{module.payment_link_url.url}}?dealId={{ d.id }}&action=update" class="btn btn-update">Update</a>
+                <button class="btn btn-pause" data-action="pause" data-deal-id="{{ d.id }}">Pause</button>
+                <button class="btn btn-cancel" data-action="cancel" data-deal-id="{{ d.id }}">Cancel</button>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+  <div style="text-align:center; padding: 60px 20px;">
+<!--           <p>No donation records were found for your account.</p> -->
+         <td colspan="9" class="rd-empty-wrapper">
+          <div class="rd-empty-card">
+            <div class="rd-empty-visual">
+              <div class="rd-empty-circle">
+                <svg class="heart-icon-solid" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                </svg>
+              </div>
+            </div>
+            </div>
+            <div class="rd-empty-content">
+              <h2 class="rd-empty-title">Start Your Impact Journey</h2>
+              <p class="rd-empty-description">
+                You don't have any active recurring donations yet. Your monthly support helps us create lasting change for women and girls worldwide.
+              </p>
+              <div class="rd-empty-actions">
+                <a href="" class="rd-cta-primary" target="_blank">
+                  Make a Monthly Gift
+                </a>
+              </div>
+            </div>
+          </div>
+        </td>
+        </div> 
+        
+      {% endif %}
+    </div>
+  </div>
+</div>
+__________________________________________________________________________________________________________________________________________________
+.donor-portal-wrapper { background-color: #f8fafc; padding: 40px 20px; min-height: 100vh; }
+.donor-portal-wrapper .container { max-width: 1400px; margin: 0 auto; }
+.donor-portal-wrapper h1 { font-size: 28px; font-weight: 700; color: #0f172a; margin-bottom: 24px; }
+.table-container { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e2e8f0; }
+
+.desktop-table { width: 100%; border-collapse: collapse; }
+.desktop-table thead { background: #022177; color: white; }
+.desktop-table th { padding: 16px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.desktop-table td { padding: 16px 20px; font-size: 14px; color: #475569; border-bottom: 1px solid #e2e8f0; }
+
+.status-badge { background-color: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center;}
+.amount { font-weight: 700; color: #0f172a; }
+
+.btn { padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; border: none; cursor: pointer; text-decoration: none; transition: 0.2s; }
+.btn-update { background-color: #2563eb; color: white; }
+.btn-pause { background-color: #eab308; color: white; }
+.btn-cancel { background-color: #dc2626; color: white; }
+.btn:hover { opacity: 0.9; transform: translateY(-1px); }
+.actions { white-space: nowrap; }
+
+/* Mobile Logic */
+.mobile-cards { display: none; }
+@media (max-width: 1024px) {
+  .desktop-table { display: none; }
+  .mobile-cards { display: block; padding: 15px; }
+  .card { border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; margin-bottom: 15px; background: #fff; }
+  .card-header { display: flex; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card-label { font-size: 11px; color: #64748b; text-transform: uppercase;  display: block; }
+  .card-actions { margin-top: 15px; display: flex; gap: 5px; flex-wrap: wrap; justify-content: center;}
+}
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #0f172a;
+  color: white;
+  padding: 14px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 9999;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+.toast-success { background: #166534; }
+.toast-error { background: #991b1b; }
+/* Container for the empty state within the table */
+.rd-empty-wrapper {
+  padding: 100px 20px !important;
+  background-color: #ffffff;
+  border-bottom: none !important;
+}
+
+.rd-empty-card {
+  max-width: 500px;
+  margin: 0 auto;
+  text-align: center;
+  animation: fadeIn 0.6s ease-out;
+}
+
+/* Soft pulse visual for the icon */
+.rd-empty-circle {
+  width: 80px;
+  height: 80px;
+  background: #f0f7ff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 30px;
+  color: #022177;
+  position: relative;
+}
+
+.rd-empty-circle::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid #f0f7ff;
+  animation: pulse 2s infinite;
+}
+
+.rd-empty-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 12px;
+  letter-spacing: -0.02em;
+}
+
+.rd-empty-description {
+  font-size: 16px;
+  color: #64748b;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+/* High-end primary button */
+.rd-cta-primary {
+  display: inline-block;
+  background: #022177;
+  color: #ffffff;
+  padding: 14px 32px;
+  border-radius: 50px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 6px -1px rgba(2, 33, 119, 0.1), 0 2px 4px -1px rgba(2, 33, 119, 0.06);
+}
+
+.rd-cta-primary:hover {
+  background: #1e3a8a;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(2, 33, 119, 0.2);
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* Refined Circle for the Icon */
+.rd-empty-circle {
+  width: 90px;
+  height: 90px;
+  background: #f8faff; /* Very soft blue background */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 30px;
+  box-shadow: inset 0 2px 4px rgba(2, 33, 119, 0.05);
+  position: relative;
+}
+
+/* Beautiful Solid Heart Icon */
+.heart-icon-solid {
+  width: 40px;
+  height: 40px;
+  fill: #022177; /* Your brand blue */
+  filter: drop-shadow(0 4px 6px rgba(2, 33, 119, 0.2));
+  animation: heartFloat 3s ease-in-out infinite;
+}
+
+/* Subtle Floating Animation */
+@keyframes heartFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.05); }
+}
+
+/* Background Pulse Effect */
+.rd-empty-circle::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 1px solid #e0ebff;
+  animation: ripple 3s infinite;
+}
+
+@keyframes ripple {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* Enhancing the Content Text */
+.rd-empty-title {
+  color: #022177;
+  font-size: 26px;
+  margin-bottom: 15px;
+}
+
+.rd-empty-description {
+  color: #516189;
+  font-size: 16px;
+  max-width: 380px;
+  margin-left: auto;
+  margin-right: auto;
+}
+___________________________________________________________________________________________________________________________________
+document.addEventListener('DOMContentLoaded', () => {
+  const MAKE_WEBHOOK_URL = '';
+  const container = document.querySelector('.donor-portal-wrapper');
+
+  /* =========================
+     TOAST
+  ========================= */
+  function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position:fixed;
+      bottom:20px;
+      right:20px;
+      padding:15px 25px;
+      background:${type === 'error' ? '#dc2626' : '#333'};
+      color:#fff;
+      border-radius:8px;
+      z-index:10000;
+      font-family:sans-serif;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
+  }
+
+  /* =========================
+     MAKE WEBHOOK
+  ========================= */
+  async function sendToMake(payload) {
+    try {
+      const res = await fetch(MAKE_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      return res.ok;
+    } catch (err) {
+      console.error('Webhook Error:', err);
+      return false;
+    }
+  }
+
+  /* =========================
+     AUTO TRIGGER AFTER PAYMENT
+     ?dealId=XXX&action=update
+  ========================= */
+  const params = new URLSearchParams(window.location.search);
+  const urlDealId = params.get('dealId');
+  const urlAction = params.get('action');
+
+  if (urlDealId && urlAction) {
+    
+    const key = `processed_${urlDealId}_${urlAction}`;
+
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, 'true');
+
+      sendToMake({ deal_id: urlDealId, action: urlAction })
+        .then((success) => {
+          if (success) {
+            showToast(`Donation ${urlAction} processed successfully.`);
+            window.history.replaceState({}, document.title, window.location.pathname);
+          } else {
+            showToast(`Failed to process ${urlAction}. Please contact support.`, 'error');
+          }
+        });
+    }
+  }
+
+  /* =========================
+     PAUSE / CANCEL HANDLER
+  ========================= */
+  if (container) {
+    container.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.btn-pause, .btn-cancel');
+      if (!btn) return;
+
+      const dealId = btn.dataset.dealId;
+      const action = btn.dataset.action;
+
+      if (!confirm(`Are you sure you want to ${action} this subscription?`)) return;
+
+      const originalText = btn.textContent;
+      btn.textContent = 'Processing...';
+      btn.disabled = true;
+
+      const success = await sendToMake({ deal_id: dealId, action });
+
+      if (success) {
+        showToast(`Request to ${action} has been sent.`);
+      } else {
+        showToast(`Failed to send ${action} request.`, 'error');
+      }
+
+      btn.textContent = originalText;
+      btn.disabled = false;
+    });
+  }
+});
