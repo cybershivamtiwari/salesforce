@@ -29,3 +29,22 @@ Step To Create 2gp Package
 --------> sf force:auth:web:login -d -a fmeDevhub
 --------> https://developer.salesforce.com/docs/metadata-coverage/62
 sf package version create --package "" --code-coverage --installation-key-bypass  --wait 10 -v DevHub
+
+
+
+
+
+
+
+
+
+sf package create --name "package name" --package-type Managed --path force-app --target-dev-hub DevHub
+
+sf apex run test --test-level RunLocalTests --wait 10  
+
+sf force:auth:web:login -d -a DevHub
+
+sf package version create --package "package name" --code-coverage --installation-key-bypass  --wait 10 -v DevHub
+
+
+
