@@ -1,0 +1,31 @@
+Step To Create 2gp Package
+1. Retrieve your code in Vs code
+2. sfdx force:auth:web:login -d -a DevhubLite      // DevhubLite is alias
+3. sf package create --name "Name of the package" --package-type Managed --path force-app --target-dev-hub DevhubLite
+4. sf package version create --package "Name of the package" --code-coverage --installation-key-bypass  --wait 10 -v DevhubLite        // --codecoverage you can check 8 time in a days    --skip-ancestor-check
+5. To check coverage before creating package sf package version report --package "Id of package" --verbose    
+5. To create Release use this sf package version promote --package Id of package
+
+
+{
+  "packageDirectories": [
+    {
+      "versionName": "ver 0.1",
+      "versionNumber": "0.1.0.NEXT",
+      "path": "force-app",
+      "package": "Package Name",
+      "versionDescription": ""
+    }
+  ],
+  "name": "PackageName",
+  "namespace": "Namespace",
+  "sfdcLoginUrl": "https://login.salesforce.com",
+  "sourceApiVersion": "66.0",
+  "packageAliases": {
+    "Package name": "Id of intial package"
+  }
+}
+
+--------> sf force:auth:web:login -d -a fmeDevhub
+--------> https://developer.salesforce.com/docs/metadata-coverage/62
+sf package version create --package "" --code-coverage --installation-key-bypass  --wait 10 -v DevHub
